@@ -1,0 +1,16 @@
+CREATE TABLE sellers (
+    id VARCHAR(255) PRIMARY KEY,
+    seller_name VARCHAR(255),
+    shop_url VARCHAR(255),
+    five_star_rate INT
+);
+
+CREATE TABLE junction (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    seller_id VARCHAR(255),
+    asin VARCHAR(255) NOT NULL,
+    evaluate BOOLEAN,
+    product_master BOOLEAN,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (seller_id) REFERENCES sellers(id)
+);

@@ -5,8 +5,8 @@
 title: "商品リサーチDB(案)"
 ---
 erDiagram
-    sellers ||--o{ join : "① ASINリスト取得"
-    join }o--|| products_master : "② 商品マスタ情報取得"
+    sellers ||--o{ junction : "① ASINリスト取得"
+    junction }o--|| products_master : "② 商品マスタ情報取得"
     research }o--|| sellers : ""
     products_master ||--o{ research : "④ サーチリスト作成"
     products_master ||--o{ products_ec : "③ 画像で仕入れ先候補検索"
@@ -17,29 +17,29 @@ erDiagram
     deliver ||--o{ stock : "ASIN:deliver.deliver=true"
     stock ||--o{ shipping :"ASIN:stock.shipping=true"
     analysis }o--o{ shipping : ""
-    analysis }o--|| join :""
+    analysis }o--|| junction :""
 
 
 
     sellers {
-        bigint id PK "Seller ID"
+        varchar id PK "Seller ID"
         varchar seller_name "Seller名"
         varchar shop_url "Shop URL"
         int five_star_rate "星5率"
     }
 
-    join {
-        bigint id PK "ID"
-        bigint seller_id FK "Seller ID:sellers.id"
-        varchar asin FK "ASIN"
+    junction {
+        bigint id PK "ID: auto increment"
+        varchar seller_id FK "Seller ID:sellers.id"
+        varchar asin FK "ASIN: not null"
         bool evaluate FK "research.dicision"
         bool product_master
-        timestamp created_at "作成日時"
+        timestamp created_at "作成日時: not null"
     }
 
 %% 検索時間に依存するdataを分離。productsとproducts_detailへ再編
     products_master { 
-        varchar asin PK "ASIN:join.asin"
+        varchar asin PK "ASIN:junction.asin"
         varchar amazon_url "商品ページ"
         float weight "商品重量"
         string image "商品画像URL:cloud storage"
@@ -58,7 +58,7 @@ erDiagram
     research {
         bigint id PK ""
         bigint research_id FK "リサーチID"
-        varcher asin FK "ASIN:join.asin"
+        varcher asin FK "ASIN:junction.asin"
         timestamp research_date "リサーチ日時"
         bool dicision "仕入れ判定"
         bool final_dicision "最終判定"
@@ -66,7 +66,7 @@ erDiagram
 
     products_detail {
         bigint id PK "ASIN検索履歴ID"
-        varchar asin FK "ASIN:join.asin"
+        varchar asin FK "ASIN:junction.asin"
         bigint research_id FK "research.research_id"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
@@ -93,7 +93,7 @@ erDiagram
 
     purchase {
         bigint id PK "仕入れID"
-        varchar asin FK "ASIN:join.asin"
+        varchar asin FK "ASIN:junction.asin"
         int quantity "仕入れ数"
         float price "購入単価"
         cry cry "購入通貨"
@@ -113,7 +113,7 @@ erDiagram
     stock {
         bigint id PK "在庫ID"
         bigint deliver_id FK "納品ID:deliver.id"
-        varchar asin FK "ASIN:join.asin"
+        varchar asin FK "ASIN:junction.asin"
         int quantity "在庫数"
         int sales "販売数"
         timestamp created_date "納品日時"
@@ -130,7 +130,7 @@ erDiagram
 
     analysis {
         bigint id PK "分析ID"
-        varchar asin FK "ASIN:join.asin"
+        varchar asin FK "ASIN:junction.asin"
         float three_month_roi "過去3カ月利益率"
         boolean restock_dicision "再入荷判定"
     }
