@@ -1,2 +1,3 @@
 ./asin_search_dev_env/
 /.env
+./test/
