@@ -1,8 +1,6 @@
 CREATE TABLE sellers (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     seller VARCHAR(255) UNIQUE NOT NULL,
-    seller_name VARCHAR(255),
-    shop_url VARCHAR(255),
     five_star_rate INT,
     last_search TIMESTAMP NOT NULL
 );
@@ -10,10 +8,9 @@ CREATE TABLE sellers (
 CREATE TABLE products_master (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     asin VARCHAR(255) UNIQUE,
-    amazon_url VARCHAR(255),
     weight FLOAT,
     weight_unit VARCHAR(255),
-    image VARCHAR(255),
+    image_url VARCHAR(255),
     ec_url VARCHAR(255),
     unit_price FLOAT,
     cry VARCHAR(3),
@@ -26,7 +23,6 @@ CREATE TABLE junction (
     seller_id BIGINT,
     product_id BIGINT,
     evaluate BOOLEAN,
-    product_master BOOLEAN,
     FOREIGN KEY (seller_id) REFERENCES sellers(id),
     FOREIGN KEY (product_id) REFERENCES products_master(id)
 );
@@ -38,6 +34,31 @@ CREATE TABLE research (
     dicision BOOLEAN,
     final_dicision BOOLEAN,
     FOREIGN KEY (asin_id) REFERENCES products_master(id)
+);
+
+CREATE TABLE products_ec (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    asin_id BIGINT NOT NULL,
+    ec_url VARCHAR(255),
+    is_checked BOOLEAN,
+    FOREIGN KEY (asin_id) REFERENCES products_master(id)
+);
+
+CREATE TABLE products_detail (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    research_id BIGINT NOT NULL,
+    three_month_sales FLOAT,
+    competitors INT,
+    monthly_sales_per_competitor FLOAT,
+    lowest_price INT,
+    commission INT,
+    deposit INT,
+    cry_jpy FLOAT,
+    expected_purchase_price FLOAT,
+    expected_profit FLOAT,
+    expected_roi FLOAT,
+    decision BOOLEAN,
+    FOREIGN KEY (research_id) REFERENCES research(id)
 );
 
 

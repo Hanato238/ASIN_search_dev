@@ -24,28 +24,17 @@ erDiagram
     sellers {
         bigint id PK "unique key: auto increment"
         varchar seller UK "Seller ID: not null"
-        varchar seller_name "Seller名"
-        varchar shop_url "Shop URL"
         int five_star_rate "星5率"
         timestamp last_search "最終検索日時: not null"
-    }
-
-    junction {
-        bigint id PK "ID: auto increment"
-        bigint seller_id FK "Seller ID:sellers.id"
-        bigint product_id FK "product id: products_master.id"
-        bool evaluate FK "research.dicision"
-        bool product_master
-        timestamp created_at "作成日時: not null"
     }
 
 %% 検索時間に依存するdataを分離。productsとproducts_detailへ再編
     products_master { 
         bigint id PK "unique key: auto increment"
         varchar asin UK "ASIN:junction.asin"
-        varchar amazon_url "商品ページ"
         float weight "商品重量"
-        string image "商品画像URL:cloud storage"
+        varchar weight_unit "重量単位: [kilograms, grams, pound]"
+        string image "商品画像URL"
         varchar ec_url "購入先URL"
         float unit_price "購入単価"
         cry cry "通貨単位"
@@ -53,23 +42,32 @@ erDiagram
         timestamp last_sellers_search "最終seller検索日時: not null"
     }
 
-    products_ec {
-        bigint id PK
-        string ec_url "仕入れ先候補URL"
-        bool check "チェック"
+    junction {
+        bigint id PK "ID: auto increment"
+        bigint seller_id FK "Seller ID:sellers.id"
+        bigint product_id FK "product id: products_master.id"
+        bool evaluate FK "research.dicision"
+        timestamp created_at "作成日時: not null"
     }
 
 %% asinで一括検索する場合を考慮し、リサーチ日時とともに中間テーブル作成
     research {
-        bigint id PK "unique key: auto increment"
+        bigint id PK "auto increment"
         bigint asin_id FK "ASIN:products_master.id: not null"
         timestamp research_date "リサーチ日時"
         bool dicision "仕入れ判定"
         bool final_dicision "最終判定"
     }
 
+    products_ec {
+        bigint id PK "auto increment"
+        bigint asin_id FG "ASIN:products_master.id: not null"
+        string ec_url "仕入れ先候補URL"
+        bool is_checked "チェック"
+    }
+
     products_detail {
-        bigint id PK "ASIN検索履歴ID"
+        bigint id PK "auto increment"
         bigint research_id FK "research.id: not null"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
