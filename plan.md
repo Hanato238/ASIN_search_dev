@@ -20,7 +20,6 @@ FBAを利用した個人輸入業の仕入れ調査の効率化のため、amazo
     * Keepa
 * 使用システム 
     * Cloud SQL
-    * Cloud Storage
     * Cloud Functions
 
 Cloud SQLにDBを構築し、Cloud Functionsで定期実行しデータを収集する。画像データはCloud Storage上に保存し、リンクをCloud SQLに保存する。
@@ -28,7 +27,7 @@ Cloud SQLにDBを構築し、Cloud Functionsで定期実行しデータを収集
 
 1. DBに登録されているsellerIDを引数に、Cloud FunctionsとKeepaでsellerの出品しているASINを取得。中間テーブルを更新する。
 1. DBに登録されているASINを引数に、Cloud FunctionsとSP-APIを利用してASINに対応するURL, 重量等, 商品画像のマスタ情報を取得する。商品画像はCloud Storageに保存する。
-1. DBにある商品画像のURL(Cloud Storage)をもとにCloud Storageに保存された商品画像を取得。これを引数にCloud FunctionsでCloud Vision APIを呼び出し、ヒットした検索結果上位5つをDBに保存する。
+1. DBにある商品画像のURLから商品画像を取得。これを引数にCloud FunctionsでCloud Vision APIを呼び出し、ヒットした検索結果上位5つをDBに保存する。
 1. 商品マスタ情報で最終検索日時が一定期間より過去のものを選択し、Cloud FunctionsでDB上のサーチリストに追加する。
 1. サーチリスト上で検索が終了していないものを選択し、Cloud FunctionsでKeepaを呼び出し、その商品の売れ行きなどを計算し、DBに追加する。
 1. userがspreadsheetを利用してDBの情報(商品価格等)を更新する。
