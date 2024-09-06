@@ -8,8 +8,8 @@ sequenceDiagram
     participant cf as CloudFunctions
     participant spapi as SP-API
 
-        opt 定期実行 : 商品マスタ検索=join.add_product_master(asin)
-            cf ->> db : request ASIN at join(join.product_master=false)
+        opt 定期実行 : 商品マスタ検索
+            cf ->> db : request ASIN at products_master(amazon_url=NULL)
             db -->> cf : return ASIN
             cf ->> spapi : search by ASIN
             spapi -->> cf : return details

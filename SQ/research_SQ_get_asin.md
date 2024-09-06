@@ -1,4 +1,3 @@
-
 ```mermaid
 ---
 title: 'sellerリストから商品リスト取得'

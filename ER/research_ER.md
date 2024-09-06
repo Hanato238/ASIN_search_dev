@@ -22,16 +22,18 @@ erDiagram
 
 
     sellers {
-        varchar id PK "Seller ID"
+        bigint id PK "unique key: auto increment"
+        varchar seller UK "Seller ID: not null"
         varchar seller_name "Seller名"
         varchar shop_url "Shop URL"
         int five_star_rate "星5率"
+        timestamp last_search "最終検索日時: not null"
     }
 
     junction {
         bigint id PK "ID: auto increment"
-        varchar seller_id FK "Seller ID:sellers.id"
-        varchar asin FK "ASIN: not null"
+        bigint seller_id FK "Seller ID:sellers.id"
+        bigint product_id FK "product id: products_master.id"
         bool evaluate FK "research.dicision"
         bool product_master
         timestamp created_at "作成日時: not null"
@@ -39,13 +41,16 @@ erDiagram
 
 %% 検索時間に依存するdataを分離。productsとproducts_detailへ再編
     products_master { 
-        varchar asin PK "ASIN:junction.asin"
+        bigint id PK "unique key: auto increment"
+        varchar asin UK "ASIN:junction.asin"
         varchar amazon_url "商品ページ"
         float weight "商品重量"
         string image "商品画像URL:cloud storage"
         varchar ec_url "購入先URL"
         float unit_price "購入単価"
         cry cry "通貨単位"
+        timestamp last_search "最終検索日時: not null"
+        timestamp last_sellers_search "最終seller検索日時: not null"
     }
 
     products_ec {
@@ -56,9 +61,8 @@ erDiagram
 
 %% asinで一括検索する場合を考慮し、リサーチ日時とともに中間テーブル作成
     research {
-        bigint id PK ""
-        bigint research_id FK "リサーチID"
-        varcher asin FK "ASIN:junction.asin"
+        bigint id PK "unique key: auto increment"
+        bigint asin_id FK "ASIN:products_master.id: not null"
         timestamp research_date "リサーチ日時"
         bool dicision "仕入れ判定"
         bool final_dicision "最終判定"
@@ -66,8 +70,7 @@ erDiagram
 
     products_detail {
         bigint id PK "ASIN検索履歴ID"
-        varchar asin FK "ASIN:junction.asin"
-        bigint research_id FK "research.research_id"
+        bigint research_id FK "research.id: not null"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
         float monthly_sales_per_competitor "カートごと月間販売数"
