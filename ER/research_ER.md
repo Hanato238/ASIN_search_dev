@@ -7,12 +7,11 @@ title: "商品リサーチDB(案)"
 erDiagram
     sellers ||--o{ junction : "① ASINリスト取得"
     junction }o--|| products_master : "② 商品マスタ情報取得"
-    research }o--|| sellers : ""
-    products_master ||--o{ research : "④ サーチリスト作成"
+    products_detail }o--|| sellers : ""
+    products_master ||--o{ products_detail : "④ サーチリスト作成"
     products_master ||--o{ products_ec : "③ 画像で仕入れ先候補検索"
-    research ||--o{ products_detail : "⑤ keepaで需要計算"
     products_detail ||--o{ competitors : ""
-    research ||--|| purchase : "asin:research.final_dicision=true"
+    products_detail ||--|| purchase : "asin:products_detail.final_dicision=true"
     purchase ||--|| deliver : "ASIN:purchase.transfer=true"
     deliver ||--o{ stock : "ASIN:deliver.deliver=true"
     stock ||--o{ shipping :"ASIN:stock.shipping=true"
@@ -46,29 +45,21 @@ erDiagram
         bigint id PK "ID: auto increment"
         bigint seller_id FK "Seller ID:sellers.id"
         bigint product_id FK "product id: products_master.id"
-        bool evaluate FK "research.dicision"
+        bool evaluate FK "products_detail.dicision"
         timestamp created_at "作成日時: not null"
-    }
-
-%% asinで一括検索する場合を考慮し、リサーチ日時とともに中間テーブル作成
-    research {
-        bigint id PK "auto increment"
-        bigint asin_id FK "ASIN:products_master.id: not null"
-        timestamp research_date "リサーチ日時"
-        bool dicision "仕入れ判定"
-        bool final_dicision "最終判定"
     }
 
     products_ec {
         bigint id PK "auto increment"
-        bigint asin_id FG "ASIN:products_master.id: not null"
+        bigint asin_id FK "ASIN:products_master.id: not null"
         string ec_url "仕入れ先候補URL"
         bool is_checked "チェック"
     }
 
     products_detail {
         bigint id PK "auto increment"
-        bigint research_id FK "research.id: not null"
+        bigint asin_id FK "ASIN:products_master.id: not null"
+        timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
         float monthly_sales_per_competitor "カートごと月間販売数"
@@ -80,6 +71,7 @@ erDiagram
         float expected_profit "予想利益"
         float expexted_roi "予想利益率"
         bool decision "仕入判定"
+        bool final_dicision "最終判定"
     }
 
 %% 競合の情報をtableとして追加

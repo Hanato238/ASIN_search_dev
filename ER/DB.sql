@@ -72,3 +72,7 @@ INSERT INTO sellers (seller, last_search) VALUES
 ('A2F3O09R621N7L', '2020-01-01 00:00:00'),
 ('A2I0XHD58EM6DE', '2020-01-01 00:00:00'),
 ('A2NL3Y3Y7U50YS', '2020-01-01 00:00:00');
+
+
+ALTER TABLE products_master ADD COLUMN tms_test1 int;
+ALTER TABLE products_master ADD COLUMN tms_test2 int;
