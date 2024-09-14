@@ -31,29 +31,45 @@ Cloud SQLにDBを構築し、Cloud Functionsで定期実行しデータを収集
 1. 商品マスタ情報で最終検索日時が一定期間より過去のものを選択し、Cloud FunctionsでDB上のサーチリストに追加する。
 1. サーチリスト上で検索が終了していないものを選択し、Cloud FunctionsでKeepaを呼び出し、その商品の売れ行きなどを計算し、DBに追加する。
 1. userがspreadsheetを利用してDBの情報(商品価格等)を更新する。
-1. userがspreadsheetを利用してDBに登録された商品が仕入れてもよいものか最終判断を行い、結果を入力する。
+1. userがspreadsheetを利用してDBに登録された商品が仕入れてもよいものか最終判断を行い、結果を入力す
+る。
 
 ## システム方式・構成
 ### シーケンス図
-#### 1. ASINリスト取得
+####  ASINリスト取得
+頻度：1/week
+対象：sellers(is_good) IS NULL or == 1
 @import "./SQ/research_SQ_get_asin.md"
 
-#### 2. 商品のマスタ情報を取得
+####  商品のマスタ情報を取得
+頻度：ASIN登録時
+対象：All asin
 @import "./SQ/research_SQ_get_details.md"
 
-#### 3. 商品画像から仕入れ先候補を検索
+####  ASINからセラー検索
+頻度：1/month
+対象：asin(products_detail(final_dicision == 1))
+@import "./SQ/research_SQ_get_sellers.md"
+
+####  商品画像から仕入れ先候補を検索
+頻度：ASIN登録時
+対象：すべて
+※CNリージョンはcloud visionで検索できない
 @import "./SQ/research_SQ_image_search.md"
 
-#### 4. サーチリストの作成
+####  サーチリストの作成
 @import "./SQ/research_SQ_search_listing.md"
 
-#### 5. 需要計算
+####  需要計算
+頻度：1/week - 1/month
 @import "./SQ/research_SQ_keepa.md"
 
-#### 6. Userによる商品のマスタ情報入力
+####  Userによる商品のマスタ情報入力
+頻度：適宜
+対象：products_master(is_checked) IS NULL
 @import "./SQ/research_SQ_UI_input_data.md"
 
-#### 7. User(Admin)による仕入れの最終判断
+#### User(Admin)による仕入れの最終判断
 @import "./SQ/research_SQ_UI_dicision.md"
 
 

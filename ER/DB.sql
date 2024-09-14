@@ -1,8 +1,8 @@
 CREATE TABLE sellers (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     seller VARCHAR(255) UNIQUE NOT NULL,
-    five_star_rate INT,
-    last_search TIMESTAMP NOT NULL
+    last_search TIMESTAMP NOT NULL,
+    is_good BOOLEAN
 );
 
 CREATE TABLE products_master (
@@ -27,15 +27,6 @@ CREATE TABLE junction (
     FOREIGN KEY (product_id) REFERENCES products_master(id)
 );
 
-CREATE TABLE research (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    asin_id BIGINT NOT NULL,
-    research_date TIMESTAMP,
-    dicision BOOLEAN,
-    final_dicision BOOLEAN,
-    FOREIGN KEY (asin_id) REFERENCES products_master(id)
-);
-
 CREATE TABLE products_ec (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     asin_id BIGINT NOT NULL,
@@ -44,9 +35,16 @@ CREATE TABLE products_ec (
     FOREIGN KEY (asin_id) REFERENCES products_master(id)
 );
 
+CREATE TABLE ec_sites (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ec_site VARCHAR(255) NOT NULL,
+    to_research BOOLEAN
+);
+
 CREATE TABLE products_detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    research_id BIGINT NOT NULL,
+    asin_id BIGINT NOT NULL,
+    research_date TIMESTAMP,
     three_month_sales FLOAT,
     competitors INT,
     monthly_sales_per_competitor FLOAT,
@@ -58,8 +56,10 @@ CREATE TABLE products_detail (
     expected_profit FLOAT,
     expected_roi FLOAT,
     decision BOOLEAN,
-    FOREIGN KEY (research_id) REFERENCES research(id)
+    final_decision BOOLEAN,
+    FOREIGN KEY (asin_id) REFERENCES products_master(id)
 );
+
 
 
 INSERT INTO sellers (seller, last_search) VALUES
@@ -76,3 +76,4 @@ INSERT INTO sellers (seller, last_search) VALUES
 
 ALTER TABLE products_master ADD COLUMN tms_test1 int;
 ALTER TABLE products_master ADD COLUMN tms_test2 int;
+ALTER TABLE products_master ADD COLUMN ec_search BOOLEAN;

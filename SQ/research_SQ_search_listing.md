@@ -9,7 +9,7 @@ sequenceDiagram
         opt 定期実行：サーチリストの作成
             cf ->> db : request asin at products_master(products_master.last_search < a period)
             db -->> cf : return asin
-            cf -->> db : add result at research
+            cf -->> db : add result at products_detail
         end
 
 ```

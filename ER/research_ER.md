@@ -12,6 +12,7 @@ erDiagram
     products_master ||--o{ products_ec : "③ 画像で仕入れ先候補検索"
     products_detail ||--o{ competitors : ""
     products_detail ||--|| purchase : "asin:products_detail.final_dicision=true"
+    products_detail ||--|| ec_sites : "検索元サイト"
     purchase ||--|| deliver : "ASIN:purchase.transfer=true"
     deliver ||--o{ stock : "ASIN:deliver.deliver=true"
     stock ||--o{ shipping :"ASIN:stock.shipping=true"
@@ -23,8 +24,8 @@ erDiagram
     sellers {
         bigint id PK "unique key: auto increment"
         varchar seller UK "Seller ID: not null"
-        int five_star_rate "星5率"
         timestamp last_search "最終検索日時: not null"
+        bool is_good "継続的な検索対象にするか"
     }
 
 %% 検索時間に依存するdataを分離。productsとproducts_detailへ再編
@@ -33,7 +34,7 @@ erDiagram
         varchar asin UK "ASIN:junction.asin"
         float weight "商品重量"
         varchar weight_unit "重量単位: [kilograms, grams, pound]"
-        string image "商品画像URL"
+        string image_url "商品画像URL"
         varchar ec_url "購入先URL"
         float unit_price "購入単価"
         cry cry "通貨単位"
@@ -46,7 +47,6 @@ erDiagram
         bigint seller_id FK "Seller ID:sellers.id"
         bigint product_id FK "product id: products_master.id"
         bool evaluate FK "products_detail.dicision"
-        timestamp created_at "作成日時: not null"
     }
 
     products_ec {
@@ -54,6 +54,12 @@ erDiagram
         bigint asin_id FK "ASIN:products_master.id: not null"
         string ec_url "仕入れ先候補URL"
         bool is_checked "チェック"
+    }
+
+    ec_sites {
+        int id PK "auto increment"
+        strin ec_site "検索元URL: not null"
+        bool to_research "0-not, 1-research"
     }
 
     products_detail {

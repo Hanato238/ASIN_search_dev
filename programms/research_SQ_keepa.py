@@ -3,6 +3,7 @@ import dotenv
 import os
 import mysql.connector
 
+# !! これは3カ月間販売数しか取得していない！
 class KeepaClient:
     def __init__(self, api_key):
         self.api = keepa.Keepa(api_key)
@@ -23,24 +24,21 @@ class DatabaseClient:
 
     def get_asins(self):
         query = """
-        SELECT pm.asin
-        FROM products_detail pd
-        JOIN research r ON pd.research_id = r.id
-        JOIN products_master pm ON r.asin_id = pm.id
+        SELECT asin
+        FROM products_master
+        WHERE tms_test1 IS NULL;
         """
         self.cursor.execute(query)
         return [row[0] for row in self.cursor.fetchall()]
 
     def update_three_month_sales(self, asin, sales_rank_drops):
         self.cursor.execute("""
-            UPDATE products_detail
-            SET three_month_sales = %s
-            WHERE research_id = (
-                SELECT id FROM products_master WHERE asin = %s
-            )
+            UPDATE products_master
+            SET tms_test1 = %s
+            WHERE asin = %s;
         """, (sales_rank_drops, asin))
         self.connection.commit()
-
+'''
 def main():
     dotenv.load_dotenv()
     api_key = os.getenv('KEEPA_API_KEY')
@@ -58,6 +56,14 @@ def main():
     for asin in asins:
         sales_rank_drops = keepa_client.get_sales_rank_drops(asin)
         db_client.update_three_month_sales(asin, sales_rank_drops)
+'''
+# 個別asinのsales_rank_dropsを取得する
+def main():
+    dotenv.load_dotenv()
+    api_key = os.getenv('KEEPA_API_KEY')
+    keepa_client = KeepaClient(api_key)
+    sales_rank_drops = keepa_client.get_sales_rank_drops('B08YHCZNC6')
+    print(sales_rank_drops)
 
 if __name__ == "__main__":
     main()
