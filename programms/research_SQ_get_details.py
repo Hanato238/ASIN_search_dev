@@ -2,42 +2,41 @@ import time
 import dotenv
 import os
 from sp_api.api import CatalogItems
-import mysql.connector as mydb
+import mysql.connector
 from sp_api.base.exceptions import SellingApiRequestThrottledException
 
 dotenv.load_dotenv()
 
-class Database:
-    def __init__(self):
-        self.db = mydb.connect(
-            host="localhost",
-            port="3306",
-            user="root",
-            password="mysql",
-            database="test"
+class DatabaseClient:
+    def __init__(self, host, user, password, database):
+        self.connection = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
         )
-        self.cursor = self.db.cursor(dictionary=True)
+        self.cursor = self.connection.cursor(dictionary=True)
 
     def execute_query(self, query, params=None):
-        self.cursor.execute(query, params)
+        self.cursor.execute(query, params or ())
         return self.cursor.fetchall()
 
     def execute_update(self, query, params=None):
-        self.cursor.execute(query, params)
-        self.db.commit()
+        self.cursor.execute(query, params or ())
+        self.connection.commit()
 
     def close(self):
         self.cursor.close()
-        self.db.close()
+        self.connection.close()
 
 class AmazonProductUpdater:
-    def __init__(self, db):
+    def __init__(self, db, refresh_token, lwa_app_id, lwa_client_secret, marketplace):
         self.credentials = {
-            'refresh_token': os.getenv('REFRESH_TOKEN'),
-            'lwa_app_id': os.getenv('LWA_APP_ID'),
-            'lwa_client_secret': os.getenv('LWA_CLIENT_SECRET')
+            'refresh_token': refresh_token,
+            'lwa_app_id': lwa_app_id,
+            'lwa_client_secret': lwa_client_secret
         }
-        self.marketplace = os.getenv('SP_API_DEFAULT_MARKETPLACE')
+        self.marketplace =  marketplace
         self.db = db
 
     def fetch_products(self):
@@ -53,13 +52,13 @@ class AmazonProductUpdater:
             time.sleep(60)
             return self.fetch_product_details(asin)
 
-    def update_product(self, product_id, weight, weight_unit, image):
+    def update_product(self, product_id, weight, weight_unit, image_url):
         query = """
             UPDATE products_master
-            SET weight = %s, weight_unit = %s, image = %s
+            SET weight = %s, weight_unit = %s, image_url = %s
             WHERE id = %s
         """
-        params = (weight, weight_unit, image, product_id)
+        params = (weight, weight_unit, image_url, product_id)
         self.db.execute_update(query, params)
         print(f"Updated product {product_id}")
 
@@ -77,12 +76,27 @@ class AmazonProductUpdater:
             if not weight_unit:
                 weight_unit = details['attributes'].get('item_weight', [{'unit': ''}])[0]['unit']
 
-            image = details['images'][0]['images'][0]['link'] if details['images'] else ''
+            image_url = details['images'][0]['images'][0]['link'] if details['images'] else ''
 
-            self.update_product(product_id, weight, weight_unit, image)
+            self.update_product(product_id, weight, weight_unit, image_url)
+
+def main():
+    db_config = {
+        'host': os.getenv('DB_HOST'),
+        'user': os.getenv('DB_USER'),
+        'password': os.getenv('DB_PASS'),
+        'database': os.getenv('DB_NAME')
+    }
+    db_client = DatabaseClient(**db_config)
+    sp_credentials = { 
+        'refresh_token': os.getenv('REFRESH_TOKEN'),
+        'lwa_app_id': os.getenv('LWA_APP_ID'),
+        'lwa_client_secret': os.getenv('LWA_CLIENT_SECRET'),
+        'marketplace': os.getenv('SP_API_DEFAULT_MARKETPLACE')
+    }
+    updater = AmazonProductUpdater(db_client, **sp_credentials)
+    updater.process_products()
+    db_client.close()
 
 if __name__ == "__main__":
-    db = Database()
-    updater = AmazonProductUpdater(db)
-    updater.process_products()
-    db.close()
+    main()
