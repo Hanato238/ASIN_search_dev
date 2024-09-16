@@ -13,7 +13,7 @@ class DatabaseClient:
             password=password,
             database=database
         )
-        self.cursor = self.connection.cursor()
+        self.cursor = self.connection.cursor(dictionary=True)
 
     def execute_query(self, query, params=None):
         self.cursor.execute(query, params)
@@ -26,6 +26,24 @@ class DatabaseClient:
     def close(self):
         self.cursor.close()
         self.connection.close()
+
+class RepositoryToGetSales:
+    def __init__(self, db_client):
+        self.db_client = db_client
+
+    def get_asins_without_sales_rank(self):
+        return self.db_client.execute_query("""
+            SELECT asin
+            FROM products_master
+            WHERE tms_test1 IS NULL;
+        """)
+
+    def update_sales_rank(self, asin, sales_rank_drops):
+        self.db_client.execute_update("""
+            UPDATE products_master
+            SET tms_test1 = %s
+            WHERE asin = %s;
+        """, (sales_rank_drops, asin))
 
 # !! これは3カ月間販売数しか取得していない！
 class KeepaClient:
@@ -42,20 +60,11 @@ class SalesRankUpdater:
         self.keepa_client = keepa_client
 
     def update_sales_ranks(self):
-        asins = self.db_client.execute_query("""
-            SELECT asin
-            FROM products_master
-            WHERE tms_test1 IS NULL;
-        """)
+        asins = self.db_client.get_asins_without_sales_rank()
         for asin in asins:
             sales_rank_drops = self.keepa_client.get_sales_rank_drops(asin['asin'])
-            self.db_client.execute_update("""
-                UPDATE products_master
-                SET tms_test1 = %s
-                WHERE asin = %s;
-            """, (sales_rank_drops, asin['asin']))
+            self.db_client.update_sales_rank(asin['asin'], sales_rank_drops)
 
-'''
 def main():
     db_config = {
         'host': os.getenv('DB_HOST'),
@@ -64,20 +73,25 @@ def main():
         'database': os.getenv('DB_NAME')
     }
     db_client = DatabaseClient(**db_config)
+    repository = RepositoryToGetSales(db_client)
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = KeepaClient(api_key)
 
+    sales_rank_updater = SalesRankUpdater(repository, keepa_client)
+    sales_rank_updater.update_sales_ranks()
+'''
     asins = db_client.get_asins()
     for asin in asins:
         sales_rank_drops = keepa_client.get_sales_rank_drops(asin)
         db_client.update_three_month_sales(asin, sales_rank_drops)
-'''
+
+        
 # 個別asinのsales_rank_dropsを取得する
 def main():
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = KeepaClient(api_key)
     sales_rank_drops = keepa_client.get_sales_rank_drops('B08YHCZNC6')
     print(sales_rank_drops)
-
+'''
 if __name__ == "__main__":
     main()

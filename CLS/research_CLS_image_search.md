@@ -9,6 +9,15 @@ classDiagram
         +close()
     }
 
+    class RepositoryToSearchImage {
+        -db
+        +__init__(db_client)
+        +get_positive_list()
+        +get_products_to_process()
+        +save_ec_url(product_id, ec_url)
+        +update_product_status(product_id)
+    }
+
     class ImageSearcher {
         -client
         +__init__()
@@ -16,15 +25,15 @@ classDiagram
     }
 
     class ImageSearchService {
-        -db
+        -repository_search_image
         -searcher
-        +__init__(db_client)
-        +get_positive_list()
+        +__init__(repository_search_image, searcher)
         +process_product(product, positive_list)
         +run()
     }
 
-    DatabaseClient --> ImageSearchService : uses
+    DatabaseClient --> RepositoryToSearchImage : uses
+    RepositoryToSearchImage --> ImageSearchService : uses
     ImageSearcher --> ImageSearchService : uses
 
 ```

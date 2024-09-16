@@ -1,5 +1,4 @@
 ```mermaid
-
 classDiagram
     class DatabaseClient {
         -connection
@@ -10,6 +9,16 @@ classDiagram
         +close()
     }
 
+    class RepositoryToGetSeller {
+        -db
+        +__init__(db_client)
+        +get_all_products()
+        +get_seller_count(seller)
+        +add_seller(seller)
+        +get_seller_id(seller)
+        +add_junction(seller_id, product_id)
+    }
+
     class KeepaClient {
         -api
         +__init__(api_key)
@@ -18,15 +27,16 @@ classDiagram
     }
 
     class SellerSearcher {
-        -db
+        -repository
         -api
-        +__init__(db_client, keepa_client)
+        +__init__(repository, keepa_client)
         +search_seller()
         +extract_info(data)
+        +count_FBA_sellers(data)
     }
 
-    SellerSearcher --> DatabaseClient
-    SellerSearcher --> KeepaClient
-
+    DatabaseClient --> RepositoryToGetSeller : uses
+    RepositoryToGetSeller --> SellerSearcher : uses
+    KeepaClient --> SellerSearcher : uses
 
 ```

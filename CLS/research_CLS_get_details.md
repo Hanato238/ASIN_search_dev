@@ -9,17 +9,29 @@ classDiagram
         +close()
     }
 
-    class AmazonProductUpdater {
+    class RepositoryForSpAPI {
+        -db_client
+        +__init__(db_client)
+        +fetch_products()
+        +update_product(product_id, weight, weight_unit, image_url)
+    }
+
+    class AmazonAPIClient {
         -credentials
         -marketplace
-        -db
-        +__init__(db, refresh_token, lwa_app_id, lwa_client_secret, marketplace)
-        +fetch_products()
+        +__init__(refresh_token, lwa_app_id, lwa_client_secret, marketplace)
         +fetch_product_details(asin)
-        +update_product(product_id, weight, weight_unit, image_url)
+    }
+
+    class AmazonProductUpdater {
+        -db
+        -api
+        +__init__(db_client, api_client)
         +process_products()
     }
 
-    DatabaseClient --> AmazonProductUpdater : uses
+    DatabaseClient --> RepositoryForSpAPI : uses
+    RepositoryForSpAPI --> AmazonProductUpdater : uses
+    AmazonAPIClient --> AmazonProductUpdater : uses
 
 ```
