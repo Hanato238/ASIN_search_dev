@@ -40,6 +40,7 @@ erDiagram
         cry cry "通貨単位"
         timestamp last_search "最終検索日時: not null"
         timestamp last_sellers_search "最終seller検索日時: not null"
+        bool is_good "継続的な検索対象にするか"
     }
 
     junction {

@@ -58,7 +58,7 @@ Cloud SQLにDBを構築し、Cloud Functionsで定期実行しデータを収集
 @import "./SQ/research_SQ_image_search.md"
 
 ####  サーチリストの作成
-@import "./SQ/research_SQ_search_listing.md"
+-> 削除：seller検索に統一
 
 ####  需要計算
 頻度：1/week - 1/month

@@ -8,7 +8,7 @@ sequenceDiagram
     participant spapi as SP-API
 
         opt 定期実行 : 商品マスタ検索
-            cf ->> db : request ASIN at products_master(amazon_url=NULL)
+            cf ->> db : request ASIN at products_master(weight=NULL)
             db -->> cf : return ASIN
             cf ->> spapi : search by ASIN
             spapi -->> cf : return details

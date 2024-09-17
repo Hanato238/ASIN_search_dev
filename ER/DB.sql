@@ -77,6 +77,7 @@ INSERT INTO sellers (seller, last_search) VALUES
 ALTER TABLE products_master ADD COLUMN tms_test1 int;
 ALTER TABLE products_master ADD COLUMN tms_test2 int;
 ALTER TABLE products_master ADD COLUMN ec_search BOOLEAN;
+ALTER TABLE products_master ADD COLUMN is_good BOOLEAN
 
 INSERT INTO ec_sites (ec_site, to_research) VALUES
 ('https://www.amazon.com/', True),

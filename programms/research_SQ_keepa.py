@@ -39,11 +39,12 @@ class RepositoryToGetSales:
         """)
 
     def update_sales_rank(self, asin, sales_rank_drops):
-        self.db_client.execute_update("""
+        insert_query = """
             UPDATE products_master
             SET tms_test1 = %s
             WHERE asin = %s;
-        """, (sales_rank_drops, asin))
+        """,
+        self.db_client.execute_update(insert_query (sales_rank_drops, asin))
 
 # !! これは3カ月間販売数しか取得していない！
 class KeepaClient:

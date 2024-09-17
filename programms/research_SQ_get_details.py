@@ -40,7 +40,7 @@ class RepositoryForSpAPI:
     def update_product(self, product_id, weight, weight_unit, image_url):
         query = """
             UPDATE products_master
-            SET weight = %s, weight_unit = %s, image_url = %s
+            SET (weight, weight_unit, image_url) = (%s, %s, %s)
             WHERE id = %s
         """
         params = (weight, weight_unit, image_url, product_id)

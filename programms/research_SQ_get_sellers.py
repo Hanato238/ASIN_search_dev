@@ -27,12 +27,14 @@ class DatabaseClient:
         self.cursor.close()
         self.connection.close()
 
+## not Debug yet 20240916
 class RepositoryToGetSeller:
     def __init__(self, db_client):
         self.db = db_client
 
+    # ASIN取得条件にwith~を追加
     def get_all_products(self):
-        query = "SELECT id, asin FROM products_master"
+        query = "SELECT id, asin FROM products_master WITH is_good IS NULL or is_good = TRUE"
         return self.db.execute_query(query)
 
     def get_seller_count(self, seller):
@@ -50,6 +52,11 @@ class RepositoryToGetSeller:
     def add_junction(self, seller_id, product_id):
         junction_query = "INSERT INTO junction (seller_id, product_id, evaluate) VALUES (%s, %s, FALSE)"
         self.db.execute_update(junction_query, (seller_id, product_id))
+
+    # 以下の関数を追加
+    def create_record_to_products_detail(self, product_id, competitors):
+        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
+        self.db.execute_update(query, (product_id, competitors))
         
 class KeepaClient:
     def __init__(self, api_key):
@@ -65,6 +72,34 @@ class KeepaClient:
         
     def query_seller_info(self, asin):
         return self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)
+    '''
+        this returns data
+        1. data[0][['offers'] : market place object　: read "https://keepa.com/#!discuss/t/marketplace-offer-object/807"
+            {
+                "offerId": Integer,
+                "lastSeen": Integer,
+                "sellerId": String,
+                "isPrime": Boolean,
+                "isFBA": Boolean,
+                "isMAP": Boolean,
+                "isShippable": Boolean,
+                "isAddonItem": Boolean,
+                "isPreorder": Boolean,
+                "isWarehouseDeal": Boolean,
+                "isScam": Boolean,
+                "shipsFromChina": Boolean,
+                "isAmazon": Boolean,
+                "isPrimeExcl": Boolean,
+                "coupon": Integer,
+                "couponHistory": Integer array,
+                "condition": Integer,
+                "minOrderQty": Integer,
+                "conditionComment": String,
+                "offerCSV": Integer array,
+                "stockCSV": Integer array,
+                "primeExclCSV": Integer array
+            }
+    '''
 
 
 
@@ -82,7 +117,9 @@ class SellerSearcher:
             product_id = product['id']
             seller_info = self.api.query_seller_info(asin)
             extracted_data = self.extract_info(seller_info[0]['offers'])
-            print(f'extracted_data : {extracted_data}')
+
+            competitors = self.count_FBA_sellers(extracted_data)
+            self.repository.create_record_to_products_detail(product_id, competitors)
 
             if not extracted_data:
                 print(f"ASIN: {asin} のsellerIDが見つかりませんでした")
@@ -103,7 +140,7 @@ class SellerSearcher:
     def extract_info(self, data):
         result = []
         for item in data:
-            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0:
+            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
                 result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
         return result
     

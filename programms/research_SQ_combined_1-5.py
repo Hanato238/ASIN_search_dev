@@ -106,7 +106,7 @@ class RepositoryForSpAPI:
     def update_product(self, product_id, weight, weight_unit, image_url):
         query = """
             UPDATE products_master
-            SET weight = %s, weight_unit = %s, image_url = %s
+            SET (weight, weight_unit, image_url) = (%s, %s, %s)
             WHERE id = %s
         """
         params = (weight, weight_unit, image_url, product_id)
@@ -230,7 +230,7 @@ class SellerSearcher:
     def extract_info(self, data):
         result = []
         for item in data:
-            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0:
+            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
                 result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
         return result
     
@@ -340,6 +340,7 @@ class SalesRankUpdater:
 # 以下の関数は、それぞれのクラスのインスタンスを生成し、処理を実行する関数
 
 # 消費token:10 per 1 seller (storefront=True:+9 tokens)
+## fills products_master (asin, last_search, last_sellers_search), junction (seller_id, product_id, evaluate), products_detail (asin_id)
 def get_asins():
     db_config = {
         'host': os.getenv('DB_HOST'),
@@ -360,6 +361,7 @@ def get_asins():
         db_client.close()
 
 # 消費token:1.6 - 6.6 per 1 asin (offers=20:+6 tokens per 10 asin)
+## fills sellers (seller, last_search), junction (seller_id, product_id, evaluate)
 def get_sellers():
     db_config = {
         "host": os.getenv("DB_HOST"),
@@ -376,6 +378,7 @@ def get_sellers():
     db_client.close()
 
 # 消費token:0
+## fills products_master (weight, weight_unit, image_url)
 def get_details():
     db_config = {
         'host': os.getenv('DB_HOST'),
@@ -397,6 +400,7 @@ def get_details():
     db_client.close()
 
 # 消費token:0
+## fills products_master (ec_search), products_ec (asin_id, ec_url)
 def image_search():
     db_config = {
         "host": os.getenv("DB_HOST"),
@@ -412,6 +416,7 @@ def image_search():
     db_client.close()
 
 # 消費token:1 per 1 asin
+## fills products_master (tms_test1)
 def get_num_of_sales():
     db_config = {
         'host': os.getenv('DB_HOST'),
