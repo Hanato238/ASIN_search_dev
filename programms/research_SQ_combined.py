@@ -1,8 +1,10 @@
-import mysql.connector
-import keepa
 import os
 import dotenv
 import time
+
+import mysql.connector
+
+import keepa
 
 from sp_api.api import CatalogItems
 from sp_api.base.exceptions import SellingApiRequestThrottledException
@@ -11,6 +13,7 @@ from google.cloud import vision
 
 dotenv.load_dotenv()
 
+# Clients
 class DatabaseClient:
     def __init__(self, host, user, password, database):
         self.connection = mysql.connector.connect(
@@ -34,6 +37,68 @@ class DatabaseClient:
         self.cursor.close()
         self.connection.close()
 
+class KeepaClient:
+    def __init__(self, api_key):
+        self.api = keepa.Keepa(api_key)
+        print("connected to Keepa")
+
+    # 10 tokens per 1 seller (storefront=True:+9 tokens)
+    def search_asin_by_seller(self, seller):
+        try:
+            products = self.api.seller_query(seller, domain='JP', storefront=True)
+            return products[seller]['asinList']
+        except Exception as e:
+            print(f"Error fetching ASINs for seller {seller}: {e}")
+            return []
+    
+    # 1.6 - 6.6 tokens per 1 asin (offers=20:+6 tokens per 10 asin)
+    def query_seller_info(self, asin):
+        return self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)
+
+    def get_sales_rank_drops(self, asin):
+        products = self.api.query(asin, domain='JP', stats=90)
+        return products[0]['stats']['salesRankDrops90']
+
+class AmazonAPIClient:
+    def __init__(self, refresh_token, lwa_app_id, lwa_client_secret, marketplace):
+        self.credentials = {
+            'refresh_token': refresh_token,
+            'lwa_app_id': lwa_app_id,
+            'lwa_client_secret': lwa_client_secret
+        }
+        self.marketplace = marketplace
+
+    def fetch_product_details(self, asin):
+        try:
+            details = CatalogItems(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token']).get_catalog_item(asin=asin, includedData=['attributes', 'images', 'productTypes', 'summaries'])
+            return details.payload
+        except SellingApiRequestThrottledException:
+            print("Quota exceeded, waiting for 60 seconds before retrying...")
+            time.sleep(60)
+            return self.fetch_product_details(asin)
+
+class ImageSearcher:
+    def __init__(self):
+        self.client = vision.ImageAnnotatorClient()
+        # positive list + negative list方式にする? : positive list方式 + salvage方式にする
+    
+    def search_image(self, image_url, positive_list=None):
+        image = vision.Image()
+        image.source.image_uri = image_url
+
+        response = self.client.web_detection(image=image)
+        annotations = response.web_detection
+
+        if annotations.pages_with_matching_images:
+            for page in annotations.pages_with_matching_images:
+                if any(domain in page.url for domain in positive_list):
+                    print(page.url)
+                    return page.url
+        return None
+
+
+
+# Repositories
 class RepositoryToGetAsin:
     def __init__(self, db_client):
         self.db_client = db_client
@@ -95,6 +160,10 @@ class RepositoryToGetSeller:
         junction_query = "INSERT INTO junction (seller_id, product_id, evaluate) VALUES (%s, %s, FALSE)"
         self.db.execute_update(junction_query, (seller_id, product_id))
 
+    def add_products_detail(self, competitors, product_id):
+        update_query = "UPDATE products_detail SET competitors = %s WHERE asin_id = %s"
+        self.db.execute_update(update_query, (competitors, product_id))
+
 class RepositoryForSpAPI:
     def __init__(self, db_client):
         self.db_client = db_client
@@ -136,47 +205,73 @@ class RepositoryToSearchImage:
         update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
         self.db.execute_update(update_query, (product_id,))
 
+class RepositoryToGetSales:
+    def __init__(self, db_client):
+        self.db_client = db_client
 
-class KeepaClient:
-    def __init__(self, api_key):
-        self.api = keepa.Keepa(api_key)
-        print("connected to Keepa")
+    def get_asins_without_sales_rank(self):
+        query = """
+            SELECT pm.asin 
+            FROM products_master pm
+            JOIN products_detail pd ON pm.id = pd.asin_id
+            WHERE pd.three_month_sales IS NULL;
+        """
+        return self.db_client.execute_query(query)
 
-    # 10 tokens per 1 seller (storefront=True:+9 tokens)
-    def search_asin_by_seller(self, seller):
-        try:
-            products = self.api.seller_query(seller, domain='JP', storefront=True)
-            return products[seller]['asinList']
-        except Exception as e:
-            print(f"Error fetching ASINs for seller {seller}: {e}")
-            return []
-    
-    # 1.6 - 6.6 tokens per 1 asin (offers=20:+6 tokens per 10 asin)
-    def query_seller_info(self, asin):
-        return self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)
+    def update_sales_rank(self, asin, sales_rank_drops):
+        insert_query = """
+            UPDATE products_detail pd
+            JOIN products_master pm ON pd.asin_id = pm.id
+            SET pd.three_month_sales = %s
+            WHERE pm.asin = %s;
+        """
+        print(asin, sales_rank_drops)
+        self.db_client.execute_update(insert_query, (sales_rank_drops, asin))
 
-    def get_sales_rank_drops(self, asin):
-        products = self.api.query(asin, domain='JP', stats=90)
-        return products[0]['stats']['salesRankDrops90']
+class RepositoryForEvaluation:
+    def __init__(self, db_client):
+        self.db_client = db_client
 
-class AmazonAPIClient:
-    def __init__(self, refresh_token, lwa_app_id, lwa_client_secret, marketplace):
-        self.credentials = {
-            'refresh_token': refresh_token,
-            'lwa_app_id': lwa_app_id,
-            'lwa_client_secret': lwa_client_secret
-        }
-        self.marketplace = marketplace
+    # is_good=NULL or Trueのidをproducts_masterから取得
+    def get_products_to_evaluate(self):
+        query = "SELECT id FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
+        return self.db_client.execute_query(query)
 
-    def fetch_product_details(self, asin):
-        try:
-            details = CatalogItems(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token']).get_catalog_item(asin=asin, includedData=['attributes', 'images', 'productTypes', 'summaries'])
-            return details.payload
-        except SellingApiRequestThrottledException:
-            print("Quota exceeded, waiting for 60 seconds before retrying...")
-            time.sleep(60)
-            return self.fetch_product_details(asin)
+    # asin_idの直近3件の判定を取得
+    def get_product_decisions(self, product_id):
+        query = """
+        SELECT decision FROM products_detail 
+        WHERE asin_id = %s 
+        ORDER BY id DESC 
+        LIMIT 3
+        """
+        return self.db_client.execute_query(query, (product_id,))
 
+    def update_product_is_good(self, product_id):
+        query = "UPDATE products_master SET is_good = 1 WHERE id = %s"
+        self.db_client.execute_update(query, (product_id,))
+
+    # is_good=NULL or Trueのidをsellersから取得
+    def get_sellers_to_evaluate(self):
+        query = "SELECT id FROM sellers WHERE is_good IS NULL OR is_good = TRUE"
+        return self.db_client.execute_query(query)
+
+    def get_seller_products(self, seller_id):
+        query = """
+        SELECT COUNT(*) as total, SUM(CASE WHEN pm.is_good = True THEN 1 ELSE 0 END) as num 
+        FROM junction j JOIN products_master pm on j.product_id = pm.id 
+        WHERE j.seller_id = %s
+        """
+        return self.db_client.execute_query(query, (seller_id,))
+        
+    def update_seller_is_good(self, seller_id):
+        query = "UPDATE sellers SET is_good = 1 WHERE id = %s"
+        self.db_client.execute_update(query, (seller_id,))
+
+
+
+
+# Managers
 class AsinSearcher:
     def __init__(self, db_client, keepa_client):
         self.db_client = db_client
@@ -227,6 +322,9 @@ class SellerSearcher:
                 self.repository.add_junction(seller_id, product_id)
             print(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
 
+            competitors = self.count_FBA_sellers(extracted_data)
+            self.repository.add_products_detail(competitors, product_id)
+
     def extract_info(self, data):
         result = []
         for item in data:
@@ -266,26 +364,6 @@ class AmazonProductUpdater:
 
             self.db_client.update_product(product_id, weight, weight_unit, image_url)
 
-
-class ImageSearcher:
-    def __init__(self):
-        self.client = vision.ImageAnnotatorClient()
-        # positive list + negative list方式にする? : positive list方式 + salvage方式にする
-    
-    def search_image(self, image_url, positive_list=None):
-        image = vision.Image()
-        image.source.image_uri = image_url
-
-        response = self.client.web_detection(image=image)
-        annotations = response.web_detection
-
-        if annotations.pages_with_matching_images:
-            for page in annotations.pages_with_matching_images:
-                if any(domain in page.url for domain in positive_list):
-                    print(page.url)
-                    return page.url
-        return None
-
 class ImageSearchService:
     def __init__(self, repository_search_image, searcher):
         self.repository_search_image = repository_search_image
@@ -322,25 +400,40 @@ class SalesRankUpdater:
         self.keepa_client = keepa_client
 
     def update_sales_ranks(self):
-        asins = self.db_client.execute_query("""
-            SELECT asin
-            FROM products_master
-            WHERE tms_test1 IS NULL;
-        """)
+        asins = self.db_client.get_asins_without_sales_rank()
         for asin in asins:
             sales_rank_drops = self.keepa_client.get_sales_rank_drops(asin['asin'])
-            self.db_client.execute_update("""
-                UPDATE products_master
-                SET tms_test1 = %s
-                WHERE asin = %s;
-            """, (sales_rank_drops, asin['asin']))
-            print(f"Updated sales rank drops for ASIN: {asin['asin']}: {sales_rank_drops}")
+            self.db_client.update_sales_rank(asin['asin'], sales_rank_drops)
+
+class EvaluateAsinAndSellers:
+    def __init__(self, repository):
+        self.repository = repository
+
+    def evaluate_products(self):
+        products = self.repository.get_products_to_evaluate()
+        for product in products:
+            decisions = self.repository.get_product_decisions(product['id'])
+            if sum(d['decision'] for d in decisions) > 1:
+                self.repository.update_product_is_good(product['id'])
+
+    def evaluate_sellers(self):
+        sellers = self.repository.get_sellers_to_evaluate()
+        for seller in sellers:
+            result = self.repository.get_seller_products(seller['id'])
+            if result[0]['total'] == 0:
+                continue
+            p = result[0]['num'] / result[0]['total'] 
+            print(p)
+            if p > 0.3:
+                self.repository.update_seller_is_good(seller['id'])
 
 
 # 以下の関数は、それぞれのクラスのインスタンスを生成し、処理を実行する関数
+## Keepa clientを利用する関数だけ別に分けて厳密に定期実行する？
+## 利用するclientごとにFunctionsインスタンスを作成する？
 
 # 消費token:10 per 1 seller (storefront=True:+9 tokens)
-## fills products_master (asin, last_search, last_sellers_search), junction (seller_id, product_id, evaluate), products_detail (asin_id)
+## fills products_master (asin, -last_search, -last_sellers_search), junction (seller_id, product_id, evaluate), products_detail (asin_id)
 def get_asins():
     db_config = {
         'host': os.getenv('DB_HOST'),
@@ -361,7 +454,7 @@ def get_asins():
         db_client.close()
 
 # 消費token:1.6 - 6.6 per 1 asin (offers=20:+6 tokens per 10 asin)
-## fills sellers (seller, last_search), junction (seller_id, product_id, evaluate)
+## fills sellers (seller, last_search), junction (seller_id, product_id, evaluate), products_detail (competitors)
 def get_sellers():
     db_config = {
         "host": os.getenv("DB_HOST"),
@@ -416,7 +509,7 @@ def image_search():
     db_client.close()
 
 # 消費token:1 per 1 asin
-## fills products_master (tms_test1)
+## fills products_detail(three_month_sales)
 def get_num_of_sales():
     db_config = {
         'host': os.getenv('DB_HOST'),
@@ -425,11 +518,29 @@ def get_num_of_sales():
         'database': os.getenv('DB_NAME')
     }
     db_client = DatabaseClient(**db_config)
+    repository = RepositoryToGetSales(db_client)
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = KeepaClient(api_key)
-    sales_rank_updater = SalesRankUpdater(db_client, keepa_client)
+    sales_rank_updater = SalesRankUpdater(repository, keepa_client)
     sales_rank_updater.update_sales_ranks()
+
+# 消費token:0
+## fills products_master AND sellers (is_good)
+def evaluate_asin_and_sellers():    
+    db_client = DatabaseClient(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASS"),
+        database=os.getenv("DB_NAME")
+    )
+    repository = RepositoryForEvaluation(db_client)
+    judge = EvaluateAsinAndSellers(repository)
+    judge.evaluate_sellers()
+
+## not filled : products_detail(ec_url?id, price_jpy, monthly, lowest_price, commission, deposit, expexts, decision)
+## not filled : products_ec(price)
+## All filled : sellers, junction, products_master, ec_sites
 
 if __name__ == "__main__":
     print("start")
-    get_num_of_sales()
+    get_sellers()

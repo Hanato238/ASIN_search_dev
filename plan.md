@@ -57,6 +57,12 @@ Cloud SQLにDBを構築し、Cloud Functionsで定期実行しデータを収集
 ※CNリージョンはcloud visionで検索できない
 @import "./SQ/research_SQ_image_search.md"
 
+###  商品・セラーを今後の継続的な検索対象とするかの判定
+頻度：1/month
+対象：is_good == True or Null
+@import "./SQ/research_SQ_judge_asin_and_sellers.md"
+
+
 ####  サーチリストの作成
 -> 削除：seller検索に統一
 

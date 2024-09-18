@@ -24,7 +24,6 @@ erDiagram
     sellers {
         bigint id PK "unique key: auto increment"
         varchar seller UK "Seller ID: not null"
-        timestamp last_search "最終検索日時: not null"
         bool is_good "継続的な検索対象にするか"
     }
 
@@ -35,9 +34,6 @@ erDiagram
         float weight "商品重量"
         varchar weight_unit "重量単位: [kilograms, grams, pound]"
         string image_url "商品画像URL"
-        varchar ec_url "購入先URL"
-        float unit_price "購入単価"
-        cry cry "通貨単位"
         timestamp last_search "最終検索日時: not null"
         timestamp last_sellers_search "最終seller検索日時: not null"
         bool is_good "継続的な検索対象にするか"
@@ -47,14 +43,14 @@ erDiagram
         bigint id PK "ID: auto increment"
         bigint seller_id FK "Seller ID:sellers.id"
         bigint product_id FK "product id: products_master.id"
-        bool evaluate FK "products_detail.dicision"
     }
 
     products_ec {
         bigint id PK "auto increment"
         bigint asin_id FK "ASIN:products_master.id: not null"
+        int price
+        string price_unit
         string ec_url "仕入れ先候補URL"
-        bool is_checked "チェック"
     }
 
     ec_sites {
@@ -66,6 +62,8 @@ erDiagram
     products_detail {
         bigint id PK "auto increment"
         bigint asin_id FK "ASIN:products_master.id: not null"
+        bitint ec_url_id FK "products_ec.id"
+        float price "price converted to JPY"
         timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
@@ -79,16 +77,6 @@ erDiagram
         float expexted_roi "予想利益率"
         bool decision "仕入判定"
         bool final_dicision "最終判定"
-    }
-
-%% 競合の情報をtableとして追加
-    competitors {
-        bigint id PK "競合データID"
-        bigint products_detail_id FK "products_detail.id"
-        varchar seller "販売元"
-        boolearm amazon_prime "Amazom Prime商品"
-        varchar product_status "商品状態"
-        int price "出品価格"
     }
 
     purchase {

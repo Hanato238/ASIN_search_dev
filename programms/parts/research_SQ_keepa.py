@@ -16,11 +16,11 @@ class DatabaseClient:
         self.cursor = self.connection.cursor(dictionary=True)
 
     def execute_query(self, query, params=None):
-        self.cursor.execute(query, params)
+        self.cursor.execute(query, params or ())
         return self.cursor.fetchall()
 
     def execute_update(self, query, params=None):
-        self.cursor.execute(query, params)
+        self.cursor.execute(query, params or ())
         self.connection.commit()
 
     def close(self):
@@ -32,19 +32,23 @@ class RepositoryToGetSales:
         self.db_client = db_client
 
     def get_asins_without_sales_rank(self):
-        return self.db_client.execute_query("""
-            SELECT asin
-            FROM products_master
-            WHERE tms_test1 IS NULL;
-        """)
+        query = """
+            SELECT pm.asin 
+            FROM products_master pm
+            JOIN products_detail pd ON pm.id = pd.asin_id
+            WHERE pd.three_month_sales IS NULL;
+        """
+        return self.db_client.execute_query(query)
 
     def update_sales_rank(self, asin, sales_rank_drops):
         insert_query = """
-            UPDATE products_master
-            SET tms_test1 = %s
-            WHERE asin = %s;
-        """,
-        self.db_client.execute_update(insert_query (sales_rank_drops, asin))
+            UPDATE products_detail pd
+            JOIN products_master pm ON pd.asin_id = pm.id
+            SET pd.three_month_sales = %s
+            WHERE pm.asin = %s;
+        """
+        print(asin, sales_rank_drops)
+        self.db_client.execute_update(insert_query, (sales_rank_drops, asin))
 
 # !! これは3カ月間販売数しか取得していない！
 class KeepaClient:
