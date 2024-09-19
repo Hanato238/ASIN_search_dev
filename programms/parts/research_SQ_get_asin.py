@@ -27,43 +27,6 @@ class DatabaseClient:
         self.cursor.close()
         self.connection.close()
 
-class RepositoryToGetAsin:
-    def __init__(self, db_client):
-        self.db_client = db_client
-
-    def get_sellers(self):
-        return self.db_client.execute_query("SELECT seller FROM sellers")
-
-    def add_product_master(self, asin):
-        counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
-        if counts[0]['COUNT(*)'] == 0:
-            insert_query = """
-                INSERT INTO products_master (asin, last_search, last_sellers_search)
-                VALUES (%s, '2020-01-01', '2020-01-01')
-            """
-            self.db_client.execute_update(insert_query, (asin,))
-            print(f"Added product master for ASIN: {asin}")
-
-    def get_product_id(self, asin):
-        result = self.db_client.execute_query("SELECT id FROM products_master WHERE asin = %s", (asin,))
-        return result[0]['id'] if result else None
-
-    def write_asin_to_junction(self, seller, product_id):
-        query = "SELECT id FROM sellers WHERE seller = %s"
-        seller_id = self.db_client.execute_query(query, (seller,))[0]['id']
-        insert_query = """
-            INSERT INTO junction (seller_id, product_id, evaluate)
-            VALUES (%s, %s, %s)
-        """
-        self.db_client.execute_update(insert_query, (seller_id, product_id, False))
-
-    def add_product_detail(self, asin_id):
-        insert_query = """
-            INSERT INTO products_detail (asin_id)
-            VALUE (%s)
-        """
-        self.db_client.execute_update(insert_query, (asin_id,))
-
 class KeepaClient:
     def __init__(self, api_key):
         self.api = keepa.Keepa(api_key)
@@ -78,6 +41,43 @@ class KeepaClient:
             print(f"Error fetching ASINs for seller {seller}: {e}")
             return []
         
+class RepositoryToGetAsin:
+    def __init__(self, db_client):
+        self.db_client = db_client
+
+    def get_sellers(self):
+        return self.db_client.execute_query("SELECT seller FROM sellers")
+
+    def add_product_master(self, asin):
+        counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
+        if counts[0]['COUNT(*)'] == 0:
+            insert_query = """
+                INSERT INTO products_master (asin, last_search)
+                VALUES (%s, '2020-01-01')
+            """
+            self.db_client.execute_update(insert_query, (asin,))
+            print(f"Added product master for ASIN: {asin}")
+
+    def get_product_id(self, asin):
+        result = self.db_client.execute_query("SELECT id FROM products_master WHERE asin = %s", (asin,))
+        return result[0]['id'] if result else None
+
+    def write_asin_to_junction(self, seller, product_id):
+        query = "SELECT id FROM sellers WHERE seller = %s"
+        seller_id = self.db_client.execute_query(query, (seller,))[0]['id']
+        insert_query = """
+            INSERT INTO junction (seller_id, product_id)
+            VALUES (%s, %s)
+        """
+        self.db_client.execute_update(insert_query, (seller_id, product_id))
+
+    def add_product_detail(self, asin_id):
+        insert_query = """
+            INSERT INTO products_detail (asin_id)
+            VALUE (%s)
+        """
+        self.db_client.execute_update(insert_query, (asin_id,))
+
 class AsinSearcher:
     def __init__(self, db_client, keepa_client):
         self.db_client = db_client

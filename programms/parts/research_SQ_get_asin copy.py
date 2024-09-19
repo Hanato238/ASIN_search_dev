@@ -42,8 +42,7 @@ class RepositoryToGetAsin:
         counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
         if counts[0]['COUNT(*)'] == 0:
             insert_query = """
-                INSERT INTO products_master (asin, last_search, last_sellers_search)
-                VALUES (%s, '2020-01-01', '2020-01-01')
+                INSERT INTO products_master (asin) VALUES (%s)
             """
             self.db_client.execute_update(insert_query, (asin,))
             print(f"Added product master for ASIN: {asin}")
@@ -77,6 +76,7 @@ class KeepaClient:
     def search_asin_by_seller(self, seller):
         try:
             products = self.api.seller_query(seller, domain='JP', storefront=True)
+            print(products)
             return products[seller]['asinList']
         except Exception as e:
             print(f"Error fetching ASINs for seller {seller}: {e}")

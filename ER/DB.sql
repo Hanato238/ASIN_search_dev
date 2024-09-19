@@ -11,6 +11,7 @@ CREATE TABLE products_master (
     weight_unit VARCHAR(255),
     image_url VARCHAR(255),
     last_search TIMESTAMP NOT NULL,
+    bool ec_search,
     is_good BOOLEAN
 );
 

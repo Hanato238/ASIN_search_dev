@@ -27,37 +27,6 @@ class DatabaseClient:
         self.cursor.close()
         self.connection.close()
 
-## not Debug yet 20240916
-class RepositoryToGetSeller:
-    def __init__(self, db_client):
-        self.db = db_client
-
-    # ASIN取得条件にwith~を追加
-    def get_all_products(self):
-        query = "SELECT id, asin FROM products_master WITH is_good IS NULL or is_good = TRUE"
-        return self.db.execute_query(query)
-
-    def get_seller_count(self, seller):
-        count_query = "SELECT COUNT(*) FROM sellers WHERE seller = %s"
-        return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
-
-    def add_seller(self, seller):
-        insert_query = "INSERT INTO sellers (seller, last_search) VALUES (%s, '2020-01-01')"
-        self.db.execute_update(insert_query, (seller,))
-
-    def get_seller_id(self, seller):
-        seller_id_query = "SELECT id FROM sellers WHERE seller = %s"
-        return self.db.execute_query(seller_id_query, (seller,))[0]['id']
-
-    def add_junction(self, seller_id, product_id):
-        junction_query = "INSERT INTO junction (seller_id, product_id, evaluate) VALUES (%s, %s, FALSE)"
-        self.db.execute_update(junction_query, (seller_id, product_id))
-
-    # 以下の関数を追加
-    def create_record_to_products_detail(self, product_id, competitors):
-        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
-        self.db.execute_update(query, (product_id, competitors))
-        
 class KeepaClient:
     def __init__(self, api_key):
         self.api = keepa.Keepa(api_key)
@@ -100,6 +69,36 @@ class KeepaClient:
                 "primeExclCSV": Integer array
             }
     '''
+
+
+class RepositoryToGetSeller:
+    def __init__(self, db_client):
+        self.db = db_client
+
+    def get_all_products(self):
+        query = "SELECT id, asin FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
+        return self.db.execute_query(query)
+
+    def get_seller_count(self, seller):
+        count_query = "SELECT COUNT(*) FROM sellers WHERE seller = %s"
+        return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
+
+    def add_seller(self, seller):
+        insert_query = "INSERT INTO sellers (seller) VALUES (%s)"
+        self.db.execute_update(insert_query, (seller,))
+
+    def get_seller_id(self, seller):
+        seller_id_query = "SELECT id FROM sellers WHERE seller = %s"
+        return self.db.execute_query(seller_id_query, (seller,))[0]['id']
+
+    def add_junction(self, seller_id, product_id):
+        junction_query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
+        self.db.execute_update(junction_query, (seller_id, product_id))
+
+    def create_record_to_products_detail(self, product_id, competitors):
+        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
+        self.db.execute_update(query, (product_id, competitors))
+        
 
 
 

@@ -29,6 +29,25 @@ class DatabaseClient:
         self.cursor.close()
         self.connection.close()
 
+class ImageSearcher:
+    def __init__(self):
+        self.client = vision.ImageAnnotatorClient()
+        # positive list + negative list方式にする? : positive list方式 + salvage方式にする
+    
+    def search_image(self, image_url, positive_list=None):
+        image = vision.Image()
+        image.source.image_uri = image_url
+
+        response = self.client.web_detection(image=image)
+        annotations = response.web_detection
+
+        if annotations.pages_with_matching_images:
+            for page in annotations.pages_with_matching_images:
+                if any(domain in page.url for domain in positive_list):
+                    print(page.url)
+                    return page.url
+        return None
+
 class RepositoryToSearchImage:
     def __init__(self, db_client):
         self.db = db_client
@@ -52,24 +71,7 @@ class RepositoryToSearchImage:
     def update_product_status(self, product_id):
         update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
         self.db.execute_update(update_query, (product_id,))
-class ImageSearcher:
-    def __init__(self):
-        self.client = vision.ImageAnnotatorClient()
-        # positive list + negative list方式にする? : positive list方式 + salvage方式にする
-    
-    def search_image(self, image_url, positive_list=None):
-        image = vision.Image()
-        image.source.image_uri = image_url
 
-        response = self.client.web_detection(image=image)
-        annotations = response.web_detection
-
-        if annotations.pages_with_matching_images:
-            for page in annotations.pages_with_matching_images:
-                if any(domain in page.url for domain in positive_list):
-                    print(page.url)
-                    return page.url
-        return None
 
 class ImageSearchService:
     def __init__(self, repository_search_image, searcher):
@@ -86,9 +88,9 @@ class ImageSearchService:
         
         if ec_url:
             self.repository_search_image.save_ec_url(product_id, ec_url)
-            self.repository_search_image.update_product_status(product_id)
         else:
-            print("No matching URL found")    
+            print("No matching URL found")
+        self.repository_search_image.update_product_status(product_id) 
 
     def run(self):
         targets = self.repository_search_image.get_products_to_process()

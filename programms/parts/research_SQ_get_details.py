@@ -40,8 +40,11 @@ class RepositoryForSpAPI:
     def update_product(self, product_id, weight, weight_unit, image_url):
         query = """
             UPDATE products_master
-            SET (weight, weight_unit, image_url) = (%s, %s, %s)
-            WHERE id = %s
+            SET weight = %s,
+            weight_unit = %s,
+            image_url = %s,
+            last_search = NOW()
+            WHERE id = %s;
         """
         params = (weight, weight_unit, image_url, product_id)
         return self.db_client.execute_update(query, params)
@@ -66,7 +69,7 @@ class AmazonAPIClient:
 
 class AmazonProductUpdater:
     def __init__(self, db_client, api_client):
-        self.db = db_client
+        self.db_client = db_client
         self.api = api_client
 
     def process_products(self):

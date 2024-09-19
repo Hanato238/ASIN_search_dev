@@ -54,7 +54,34 @@ class KeepaClient:
     # 1.6 - 6.6 tokens per 1 asin (offers=20:+6 tokens per 10 asin)
     def query_seller_info(self, asin):
         return self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)
-
+    '''
+        this returns data
+        1. data[0][['offers'] : market place object　: read "https://keepa.com/#!discuss/t/marketplace-offer-object/807"
+            {
+                "offerId": Integer,
+                "lastSeen": Integer,
+                "sellerId": String,
+                "isPrime": Boolean,
+                "isFBA": Boolean,
+                "isMAP": Boolean,
+                "isShippable": Boolean,
+                "isAddonItem": Boolean,
+                "isPreorder": Boolean,
+                "isWarehouseDeal": Boolean,
+                "isScam": Boolean,
+                "shipsFromChina": Boolean,
+                "isAmazon": Boolean,
+                "isPrimeExcl": Boolean,
+                "coupon": Integer,
+                "couponHistory": Integer array,
+                "condition": Integer,
+                "minOrderQty": Integer,
+                "conditionComment": String,
+                "offerCSV": Integer array,
+                "stockCSV": Integer array,
+                "primeExclCSV": Integer array
+            }
+    '''
     def get_sales_rank_drops(self, asin):
         products = self.api.query(asin, domain='JP', stats=90)
         return products[0]['stats']['salesRankDrops90']
@@ -110,8 +137,8 @@ class RepositoryToGetAsin:
         counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
         if counts[0]['COUNT(*)'] == 0:
             insert_query = """
-                INSERT INTO products_master (asin, last_search, last_sellers_search)
-                VALUES (%s, '2020-01-01', '2020-01-01')
+                INSERT INTO products_master (asin, last_search)
+                VALUES (%s, '2020-01-01')
             """
             self.db_client.execute_update(insert_query, (asin,))
             print(f"Added product master for ASIN: {asin}")
@@ -124,10 +151,10 @@ class RepositoryToGetAsin:
         query = "SELECT id FROM sellers WHERE seller = %s"
         seller_id = self.db_client.execute_query(query, (seller,))[0]['id']
         insert_query = """
-            INSERT INTO junction (seller_id, product_id, evaluate)
-            VALUES (%s, %s, %s)
+            INSERT INTO junction (seller_id, product_id)
+            VALUES (%s, %s)
         """
-        self.db_client.execute_update(insert_query, (seller_id, product_id, False))
+        self.db_client.execute_update(insert_query, (seller_id, product_id))
 
     def add_product_detail(self, asin_id):
         insert_query = """
@@ -141,7 +168,7 @@ class RepositoryToGetSeller:
         self.db = db_client
 
     def get_all_products(self):
-        query = "SELECT id, asin FROM products_master"
+        query = "SELECT id, asin FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
         return self.db.execute_query(query)
 
     def get_seller_count(self, seller):
@@ -149,7 +176,7 @@ class RepositoryToGetSeller:
         return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
 
     def add_seller(self, seller):
-        insert_query = "INSERT INTO sellers (seller, last_search) VALUES (%s, '2020-01-01')"
+        insert_query = "INSERT INTO sellers (seller) VALUES (%s)"
         self.db.execute_update(insert_query, (seller,))
 
     def get_seller_id(self, seller):
@@ -157,12 +184,12 @@ class RepositoryToGetSeller:
         return self.db.execute_query(seller_id_query, (seller,))[0]['id']
 
     def add_junction(self, seller_id, product_id):
-        junction_query = "INSERT INTO junction (seller_id, product_id, evaluate) VALUES (%s, %s, FALSE)"
+        junction_query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
         self.db.execute_update(junction_query, (seller_id, product_id))
 
-    def add_products_detail(self, competitors, product_id):
-        update_query = "UPDATE products_detail SET competitors = %s WHERE asin_id = %s"
-        self.db.execute_update(update_query, (competitors, product_id))
+    def create_record_to_products_detail(self, product_id, competitors):
+        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
+        self.db.execute_update(query, (product_id, competitors))
 
 class RepositoryForSpAPI:
     def __init__(self, db_client):
@@ -175,8 +202,11 @@ class RepositoryForSpAPI:
     def update_product(self, product_id, weight, weight_unit, image_url):
         query = """
             UPDATE products_master
-            SET (weight, weight_unit, image_url) = (%s, %s, %s)
-            WHERE id = %s
+            SET weight = %s,
+            weight_unit = %s,
+            image_url = %s,
+            last_search = NOW()
+            WHERE id = %s;
         """
         params = (weight, weight_unit, image_url, product_id)
         return self.db_client.execute_update(query, params)
@@ -304,7 +334,9 @@ class SellerSearcher:
             product_id = product['id']
             seller_info = self.api.query_seller_info(asin)
             extracted_data = self.extract_info(seller_info[0]['offers'])
-            print(f'extracted_data : {extracted_data}')
+
+            competitors = self.count_FBA_sellers(extracted_data)
+            self.repository.create_record_to_products_detail(product_id, competitors)
 
             if not extracted_data:
                 print(f"ASIN: {asin} のsellerIDが見つかりませんでした")
@@ -322,9 +354,6 @@ class SellerSearcher:
                 self.repository.add_junction(seller_id, product_id)
             print(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
 
-            competitors = self.count_FBA_sellers(extracted_data)
-            self.repository.add_products_detail(competitors, product_id)
-
     def extract_info(self, data):
         result = []
         for item in data:
@@ -332,18 +361,19 @@ class SellerSearcher:
                 result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
         return result
     
-    # 未使用関数　competitorsの数を返す
     def count_FBA_sellers(self,data):
+    # Check if any element has isAmazon set to True
         for item in data:
             if item['isAmazon']:
-                infinite = 1000
-                return infinite
+                return 1000
+    
+        # Count elements where isPrime is True
         prime_count = sum(1 for item in data if item['isPrime'])
         return prime_count
 
 class AmazonProductUpdater:
     def __init__(self, db_client, api_client):
-        self.db = db_client
+        self.db_client = db_client
         self.api = api_client
 
     def process_products(self):
@@ -379,9 +409,9 @@ class ImageSearchService:
         
         if ec_url:
             self.repository_search_image.save_ec_url(product_id, ec_url)
-            self.repository_search_image.update_product_status(product_id)
         else:
-            print("No matching URL found")    
+            print("No matching URL found")
+        self.repository_search_image.update_product_status(product_id) 
 
     def run(self):
         targets = self.repository_search_image.get_products_to_process()
@@ -543,4 +573,4 @@ def evaluate_asin_and_sellers():
 
 if __name__ == "__main__":
     print("start")
-    get_sellers()
+    get_details()
