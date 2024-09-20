@@ -1,17 +1,17 @@
 CREATE TABLE sellers (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    seller VARCHAR(255) UNIQUE NOT NULL,
+    seller VARCHAR(20) UNIQUE NOT NULL,
     is_good BOOLEAN
 );
 
 CREATE TABLE products_master (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    asin VARCHAR(255) UNIQUE,
+    asin VARCHAR(15) UNIQUE,
     weight FLOAT,
-    weight_unit VARCHAR(255),
+    weight_unit VARCHAR(10),
     image_url VARCHAR(255),
     last_search TIMESTAMP NOT NULL,
-    bool ec_search,
+    ec_search BOOLEAN,
     is_good BOOLEAN
 );
 
@@ -33,7 +33,8 @@ CREATE TABLE products_ec (
 
 CREATE TABLE ec_sites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    ec_site VARCHAR(255) NOT NULL,
+    ec_site VARCHAR(50) NOT NULL,
+    cry VARCHAR(4),
     to_research BOOLEAN
 );
 
@@ -55,7 +56,7 @@ CREATE TABLE products_detail (
     decision BOOLEAN,
     final_decision BOOLEAN,
     FOREIGN KEY (asin_id) REFERENCES products_master(id),
-    FOREIGN KEY (ec_url_id) REFERENCES ec_sites(id)
+    FOREIGN KEY (ec_url_id) REFERENCES products_ec(id)
 );
 
 
@@ -73,7 +74,7 @@ INSERT INTO sellers (seller) VALUES
 
 
 
-INSERT INTO ec_sites (ec_site, to_research) VALUES
-('https://www.amazon.com/', True),
-('https://www.walmart.com/', True),
-('https://www.ebay.com/', True)
+INSERT INTO ec_sites (ec_site, cry, to_research) VALUES
+('https://www.amazon.com/', 'USD', True),
+('https://www.walmart.com/', 'USD', True),
+('https://www.ebay.com/', 'USD', True);

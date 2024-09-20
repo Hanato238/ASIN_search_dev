@@ -2,28 +2,35 @@ import os
 import dotenv
 import time
 
-import mysql.connector
+# for DatabaseClient
+from google.cloud.sql.connector import Connector
+import pymysql
 
+# for KeepaClient
 import keepa
 
+# for SpAPIClitne
 from sp_api.api import CatalogItems
 from sp_api.base.exceptions import SellingApiRequestThrottledException
 
+# for ImageSearcher
 from google.cloud import vision
 
 dotenv.load_dotenv()
 
 # Clients
 class DatabaseClient:
-    def __init__(self, host, user, password, database):
-        self.connection = mysql.connector.connect(
-            host=host,
+    def __init__(self, instance_connection_name, user, password, database):
+        self.connector = Connector()
+        self.connection = self.connector.connect(
+            instance_connection_name,
+            "pymysql",
             user=user,
             password=password,
-            database=database
+            db=database
         )
-        self.cursor = self.connection.cursor(dictionary=True)
-        print("connected to DB")
+        self.cursor = self.connection.cursor(pymysql.cursors.DictCursor)
+        print("connected to Cloud SQL")
 
     def execute_query(self, query, params=None):
         self.cursor.execute(query, params or ())
@@ -36,6 +43,7 @@ class DatabaseClient:
     def close(self):
         self.cursor.close()
         self.connection.close()
+        self.connector.close()
 
 class KeepaClient:
     def __init__(self, api_key):
@@ -209,7 +217,7 @@ class RepositoryForSpAPI:
             WHERE id = %s;
         """
         params = (weight, weight_unit, image_url, product_id)
-        return self.db_client.execute_update(query, params)
+        self.db_client.execute_update(query, params)
     
 class RepositoryToSearchImage:
     def __init__(self, db_client):
@@ -462,16 +470,20 @@ class EvaluateAsinAndSellers:
 ## Keepa clientを利用する関数だけ別に分けて厳密に定期実行する？
 ## 利用するclientごとにFunctionsインスタンスを作成する？
 
-# 消費token:10 per 1 seller (storefront=True:+9 tokens)
-## fills products_master (asin, -last_search, -last_sellers_search), junction (seller_id, product_id, evaluate), products_detail (asin_id)
-def get_asins():
+def create_DB_connection():
     db_config = {
-        'host': os.getenv('DB_HOST'),
+        'instance_connection_name': os.getenv('INSTANCE_CONNECTION_NAME'),
         'user': os.getenv('DB_USER'),
         'password': os.getenv('DB_PASS'),
         'database': os.getenv('DB_NAME')
     }
     db_client = DatabaseClient(**db_config)
+    return db_client
+
+# 消費token:10 per 1 seller (storefront=True:+9 tokens)
+## fills products_master (asin, last_search), junction (seller_id, product_id, evaluate), products_detail (asin_id)
+def get_asins():
+    db_client = create_DB_connection()
     repository = RepositoryToGetAsin(db_client)
     keepa_api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = KeepaClient(keepa_api_key)
@@ -486,13 +498,7 @@ def get_asins():
 # 消費token:1.6 - 6.6 per 1 asin (offers=20:+6 tokens per 10 asin)
 ## fills sellers (seller, last_search), junction (seller_id, product_id, evaluate), products_detail (competitors)
 def get_sellers():
-    db_config = {
-        "host": os.getenv("DB_HOST"),
-        "user": os.getenv("DB_USER"),
-        "password": os.getenv("DB_PASS"),
-        "database": os.getenv("DB_NAME")
-    }
-    db_client = DatabaseClient(**db_config)
+    db_client = create_DB_connection()
     repository = RepositoryToGetSeller(db_client)
     keepa_api_key = os.getenv("KEEPA_API_KEY")
     keepa_client = KeepaClient(keepa_api_key)
@@ -503,13 +509,7 @@ def get_sellers():
 # 消費token:0
 ## fills products_master (weight, weight_unit, image_url)
 def get_details():
-    db_config = {
-        'host': os.getenv('DB_HOST'),
-        'user': os.getenv('DB_USER'),
-        'password': os.getenv('DB_PASS'),
-        'database': os.getenv('DB_NAME')
-    }
-    db_client = DatabaseClient(**db_config)
+    db_client = create_DB_connection()
     repository = RepositoryForSpAPI(db_client)
     sp_credentials = { 
         'refresh_token': os.getenv('REFRESH_TOKEN'),
@@ -525,13 +525,7 @@ def get_details():
 # 消費token:0
 ## fills products_master (ec_search), products_ec (asin_id, ec_url)
 def image_search():
-    db_config = {
-        "host": os.getenv("DB_HOST"),
-        "user": os.getenv("DB_USER"),
-        "password": os.getenv("DB_PASS"),
-        "database": os.getenv("DB_NAME")
-    }
-    db_client = DatabaseClient(**db_config)
+    db_client = create_DB_connection()
     repository = RepositoryToSearchImage(db_client)
     sercher = ImageSearcher()
     service = ImageSearchService(repository, sercher)
@@ -541,13 +535,7 @@ def image_search():
 # 消費token:1 per 1 asin
 ## fills products_detail(three_month_sales)
 def get_num_of_sales():
-    db_config = {
-        'host': os.getenv('DB_HOST'),
-        'user': os.getenv('DB_USER'),
-        'password': os.getenv('DB_PASS'),
-        'database': os.getenv('DB_NAME')
-    }
-    db_client = DatabaseClient(**db_config)
+    db_client = create_DB_connection()
     repository = RepositoryToGetSales(db_client)
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = KeepaClient(api_key)
@@ -556,13 +544,8 @@ def get_num_of_sales():
 
 # 消費token:0
 ## fills products_master AND sellers (is_good)
-def evaluate_asin_and_sellers():    
-    db_client = DatabaseClient(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        database=os.getenv("DB_NAME")
-    )
+def evaluate_asin_and_sellers():  
+    db_client = create_DB_connection()  
     repository = RepositoryForEvaluation(db_client)
     judge = EvaluateAsinAndSellers(repository)
     judge.evaluate_sellers()
@@ -572,5 +555,5 @@ def evaluate_asin_and_sellers():
 ## All filled : sellers, junction, products_master, ec_sites
 
 if __name__ == "__main__":
-    print("start")
-    get_details()
+    print('start')
+    get_num_of_sales()

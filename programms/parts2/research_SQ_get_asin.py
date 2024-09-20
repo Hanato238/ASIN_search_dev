@@ -83,21 +83,20 @@ class AsinSearcher:
         self.db_client = db_client
         self.keepa_client = keepa_client
 
-    def process_sellers(self):
-        sellers = self.db_client.get_sellers()
-        for seller in sellers:
-            sellerId = seller['seller']
-            asins = self.keepa_client.search_asin_by_seller(sellerId)
-            if len(asins) == 0:
-                print(f'{sellerId} has NO Asins')
-                return
-            print(f'{sellerId} has Asins')
-            for asin in asins:
-                self.db_client.add_product_master(asin)
-                asin_id = self.db_client.get_product_id(asin)
-                if asin_id:
-                    self.db_client.add_product_detail(asin_id)
-                    self.db_client.write_asin_to_junction(sellerId, asin_id)
+    def process_seller(self, seller):
+        sellerId = seller['seller']
+        asins = self.keepa_client.search_asin_by_seller(sellerId)
+        if len(asins) == 0:
+            print(f'{sellerId} has NO Asins')
+            return
+        
+        print(f'{sellerId} has Asins')
+        for asin in asins:
+            self.db_client.add_product_master(asin)
+            asin_id = self.db_client.get_product_id(asin)
+            if asin_id:
+                self.db_client.add_product_detail(asin_id)
+                self.db_client.write_asin_to_junction(sellerId, asin_id)
 
 def main():
     db_config = {
@@ -112,7 +111,9 @@ def main():
     keepa_client = KeepaClient(keepa_api_key)
     manager = AsinSearcher(repository, keepa_client)
     try:
-        manager.process_sellers()
+        sellers = repository.get_sellers()
+        for seller in sellers:
+            manager.process_seller(seller)
     except Exception as e:
         print(f"Error: {e}")
     finally:

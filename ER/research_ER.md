@@ -55,7 +55,8 @@ erDiagram
 
     ec_sites {
         int id PK "auto increment"
-        strin ec_site "検索元URL: not null"
+        string ec_site "検索元URL: not null"
+        srting cry "購入通貨"
         bool to_research "0-not, 1-research"
     }
 

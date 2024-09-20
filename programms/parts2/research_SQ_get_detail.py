@@ -72,23 +72,22 @@ class AmazonProductUpdater:
         self.db_client = db_client
         self.api = api_client
 
-    def process_products(self):
-        products = self.db_client.fetch_products()
-        for product in products:
-            product_id, asin = product['id'], product['asin']
-            details = self.api.fetch_product_details(asin)
+    def process_product(self, product):
+        product_id, asin = product['id'], product['asin']
+        details = self.api.fetch_product_details(asin)
 
-            weight = details['attributes'].get('item_package_weight', [{'value': -1}])[0]['value']
-            if weight == 0 or weight == -1:
-                weight = details['attributes'].get('item_weight', [{'value': -1}])[0]['value']
+        weight = details['attributes'].get('item_package_weight', [{'value': -1}])[0]['value']
+        if weight == 0 or weight == -1:
+            weight = details['attributes'].get('item_weight', [{'value': -1}])[0]['value']
 
-            weight_unit = details['attributes'].get('item_package_weight', [{'unit': ''}])[0]['unit']
-            if not weight_unit:
-                weight_unit = details['attributes'].get('item_weight', [{'unit': ''}])[0]['unit']
+        weight_unit = details['attributes'].get('item_package_weight', [{'unit': ''}])[0]['unit']
+        if not weight_unit:
+            weight_unit = details['attributes'].get('item_weight', [{'unit': ''}])[0]['unit']
 
-            image_url = details['images'][0]['images'][0]['link'] if details['images'] else ''
-            print(f'ASIN {asin} weights {weight}{weight_unit}')
-            self.db_client.update_product(product_id, weight, weight_unit, image_url)
+        image_url = details['images'][0]['images'][0]['link'] if details['images'] else ''
+
+        print(f'ASIN {asin} weights {weight}{weight_unit}')
+        self.db_client.update_product(product_id, weight, weight_unit, image_url)
 
 def main():
     db_config = {
@@ -107,7 +106,11 @@ def main():
     }
     api_client = AmazonAPIClient(**sp_credentials)
     updater = AmazonProductUpdater(repository, api_client)
-    updater.process_products()
+
+    products = repository.fetch_products()
+    for product in products:
+        updater.process_product(product)
+
     db_client.close()
 
 if __name__ == "__main__":
