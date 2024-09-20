@@ -83,13 +83,15 @@ class ImageSearcher:
 
         response = self.client.web_detection(image=image)
         annotations = response.web_detection
+        ec_urls = []
 
         if annotations.pages_with_matching_images:
             for page in annotations.pages_with_matching_images:
-                if any(domain in page.url for domain in positive_list):
-                    print(page.url)
-                    return page.url
-        return None
+                    if any(domain in page.url for domain in positive_list):
+                        ec_urls.append(page.url)
+
+        return ec_urls if ec_urls else None
+
 
 class Repository:
     def __init__(self, db_client):
@@ -170,7 +172,12 @@ class AmazonProductUpdater:
         if not weight_unit:
             weight_unit = details['attributes'].get('item_weight', [{'unit': ''}])[0]['unit']
 
-        image_url = details['images'][0]['images'][0]['link'] if details['images'] else ''
+        images = details['images'][0]['images']
+        if images == []:
+            image_url = ''
+            print(f'No image_url found for ASIN {asin}')
+        else:
+            image_url = images[0]['link']
 
         print(f'ASIN {asin} weights {weight}{weight_unit}')
         details = {'id':product_id, 'asin':asin, 'weight':weight, 'weight_unit':weight_unit, 'image_url':image_url}
@@ -195,14 +202,16 @@ class ImageSearchService:
         image_url = product['image_url']
         print(f'Processing product_id: {product_id}, image_url: {image_url}')
 
-        ec_url = self.searcher.search_image(image_url, positive_list)
-        print(f'Found ec_url: {ec_url}')
-        
-        if ec_url:
-            self.repository_search_image.update_ec_url(product_id, ec_url)
-        else:
+        ec_urls = self.searcher.search_image(image_url, positive_list)
+        print(f'Found ec_url: {ec_urls}')
+
+        if ec_urls == None:
             self.repository_search_image.update_ec_url(product_id, -1)
             print("No matching URL found")
+        else:
+            for ec_url in ec_urls:
+                self.repository_search_image.update_ec_url(product_id, ec_url)
+
         self.repository_search_image.update_product_status(product_id) 
 
 
@@ -235,14 +244,19 @@ def main():
     print(f"Positive list: {positive_list}")
 
     products = repository.get_products()
+    if not products:
+        print("No products to process")
+
     # product = {'id', 'asin', 'image_url'}
+    # details = {'id', 'asin', 'weight', 'weight_unit', 'image_url'}
+    # sales_rank_drops = {'asin', 'sales_rank_drops'}
     for product in products:
         details = details_updater.fetch_product_details(product)
         details_updater.product_details_updater(details)
         sales_rank_drops = sales_rank_updater.get_sales_rank(details['asin'])
-        sales_rank_updater.update_sales_rank(sales_rank_drops)
-        if sales_rank_drops == 0 or sales_rank_drops > 200:
-            repository.update_product_status(details['asin'], sales_rank_drops)
+        sales_rank_updater.update_sales_rank(sales_rank_drops['asin'], sales_rank_drops['sales_rank_drops'])
+        if sales_rank_drops['sales_rank_drops'] == 0 or sales_rank_drops['sales_rank_drops'] > 200:
+            repository.update_product_status(details['id'])
         else:
             service.process_product(details, positive_list)
 
