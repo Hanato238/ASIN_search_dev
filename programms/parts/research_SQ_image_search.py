@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import mysql.connector
 from google.cloud import vision
+import re
 
 # 環境変数をロード
 load_dotenv()
@@ -72,12 +73,23 @@ class RepositoryToSearchImage:
         update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
         self.db.execute_update(update_query, (product_id,))
 
-
 class ImageSearchService:
     def __init__(self, repository_search_image, searcher):
         self.repository_search_image = repository_search_image
         self.searcher = searcher
     
+    def check_urls(self, url):
+        patterns = {
+            "Amazon": r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?",
+            "Walmart": r"https:\\\\/\\\\/www\\\\.walmart\\\\.(com|ca)\\\\/ip\\\\/[A-Za-z0-9-]+\\\\/[A-Za-z0-9]+",
+            "eBay": r"https:\/\/www\.ebay\.com\/itm\/.*"
+        }
+        for name, pattern in patterns.items():
+            if re.match(pattern, url):
+                return True
+            else:
+                return False
+
     def process_product(self, product, positive_list):
         product_id = product['id']
         image_url = product['image_url']
@@ -86,7 +98,7 @@ class ImageSearchService:
         ec_url = self.searcher.search_image(image_url, positive_list)
         print(f'Found ec_url: {ec_url}')
         
-        if ec_url:
+        if self.check_urls(ec_url):
             self.repository_search_image.save_ec_url(product_id, ec_url)
         else:
             print("No matching URL found")

@@ -35,18 +35,22 @@ class ImageSearcher:
         # positive list + negative list方式にする? : positive list方式 + salvage方式にする
     
     def search_image(self, image_url, positive_list=None):
+        print(image_url)
+        if image_url == None:
+            return None
         image = vision.Image()
         image.source.image_uri = image_url
 
         response = self.client.web_detection(image=image)
         annotations = response.web_detection
+        ec_urls = []
 
         if annotations.pages_with_matching_images:
             for page in annotations.pages_with_matching_images:
-                if any(domain in page.url for domain in positive_list):
-                    print(page.url)
-                    return page.url
-        return None
+                    if any(domain in page.url for domain in positive_list):
+                        ec_urls.append(page.url)
+
+        return ec_urls if ec_urls else None
 
 class RepositoryToSearchImage:
     def __init__(self, db_client):
@@ -82,20 +86,33 @@ class ImageSearchService:
     def __init__(self, repository_search_image, searcher):
         self.repository_search_image = repository_search_image
         self.searcher = searcher
-    
+
+    def check_urls(self, url):
+        patterns = {
+            "Amazon": r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?",
+            "Walmart": r"https:\\\\/\\\\/www\\\\.walmart\\\\.(com|ca)\\\\/ip\\\\/[A-Za-z0-9-]+\\\\/[A-Za-z0-9]+",
+            "eBay": r"https:\/\/www\.ebay\.com\/itm\/.*"
+        }
+        for name, pattern in patterns.items():
+            if re.match(pattern, url):
+                return True
+            else:
+                return False
+
     def process_product(self, product, positive_list):
         product_id = product['id']
         image_url = product['image_url']
         print(f'Processing product_id: {product_id}, image_url: {image_url}')
 
-        ec_url = self.searcher.search_image(image_url, positive_list)
-        print(f'Found ec_url: {ec_url}')
+        ec_urls = self.searcher.search_image(image_url, positive_list)
+        print(f'Found ec_url: {ec_urls}')
         
-        if ec_url:
-            self.repository_search_image.save_ec_url(product_id, ec_url)
-        else:
-            print("No matching URL found")
-        self.repository_search_image.update_product_status(product_id) 
+        for ec_url in ec_urls:
+            if self.check_urls(ec_url):
+                self.repository_search_image.save_ec_url(product_id, ec_url)
+            else:
+                print("No matching URL found")
+            self.repository_search_image.update_product_status(product_id) 
 
 def main():
     db_config = {
