@@ -50,13 +50,13 @@ erDiagram
         bigint asin_id FK "ASIN:products_master.id: not null"
         int price
         string price_unit
+        bool availability "仕入れ可能か"
         string ec_url "仕入れ先候補URL"
     }
 
     ec_sites {
         int id PK "auto increment"
         string ec_site "検索元URL: not null"
-        srting cry "購入通貨"
         bool to_research "0-not, 1-research"
     }
 
@@ -64,17 +64,13 @@ erDiagram
         bigint id PK "auto increment"
         bigint asin_id FK "ASIN:products_master.id: not null"
         bitint ec_url_id FK "products_ec.id"
-        float price "price converted to JPY"
+        float product_price "仕入れ価格(JPY)"
         timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
-        float monthly_sales_per_competitor "カートごと月間販売数"
         int lowest_price "競合最低出品価格"
         int commission "FBA手数料"
-        int deposit "入金量"
-        float cry_jpy "為替"
-        float expected_purchase_price "予想仕入値"
-        float expected_profit "予想利益"
+        float expected_import_fees "予想仕入値"
         float expexted_roi "予想利益率"
         bool decision "仕入判定"
         bool final_dicision "最終判定"
