@@ -120,19 +120,16 @@ class SellerSearcher:
 
 class SalesRankUpdater:
     def __init__(self, db_client, keepa_client):
-        self.db_client = db_client
+        self.repository = RepositoryToGetSales(db_client)
         self.keepa_client = keepa_client
 
-    def get_sales_rank(self, asin):
-        sales_rank_drops = self.keepa_client.get_sales_rank_drops(asin)
-        result = {'asin':asin, 'sales_rank_drops':sales_rank_drops}
-        return result
+    def process_sales_rankd_drops(self, record):
+        asin_id = record['id']
+        record = self.repository.get_record_without_sales_rank(asin_id)
+        record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(record['asin'])
+        self.repository.update_sales_rank(record)
+        return record
 
-    def update_sales_rank(self, asin, sales_rank_drops):
-        self.db_client.update_sales_rank(asin, sales_rank_drops)
-
-
-    
 def keepa_client(api_key):
     return KeepaClient(api_key)
 
@@ -220,24 +217,19 @@ class RepositoryToGetSales:
     def __init__(self, db_client):
         self.db_client = db_client
 
-    def get_asins_without_sales_rank(self):
+    def get_record_without_sales_rank(self, asin_id):
         query = """
-            SELECT pm.asin 
-            FROM products_master pm
-            JOIN products_detail pd ON pm.id = pd.asin_id
-            WHERE pd.three_month_sales IS NULL;
+            SELECT * FROM products_detail
+            WHERE asin_id = %s AND three_month_sales IS NULL;
         """
-        return self.db_client.execute_query(query)
+        return self.db_client.execute_query(query, (asin_id,))
 
-    def update_sales_rank(self, asin, sales_rank_drops):
+    def update_sales_rank(self, record):
+        id = record['id']
+        three_month_sales = record['three_month_sales']
         insert_query = """
-            UPDATE products_detail pd
-            JOIN products_master pm ON pd.asin_id = pm.id
-            SET pd.three_month_sales = %s
-            WHERE pm.asin = %s;
+            UPDATE products_detail
+            SET three_month_sales = %s
+            WHERE id = %s;
         """
-        print(asin, sales_rank_drops)
-        self.db_client.execute_update(insert_query, (sales_rank_drops, asin))
-
-def repository_to_get_sales(db_client):
-    return RepositoryToGetSales(db_client)
+        self.db_client.execute_update(insert_query, (three_month_sales, id))

@@ -11,17 +11,39 @@ class AmazonAPIClient:
         }
         self.marketplace = marketplace
 
-    def fetch_product_details(self, asin):
+    def request_product_details(self, result):
         try:
+            asin = result['asin']
             catalog_item = CatalogItems(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token'])
             details = catalog_item.get_catalog_item(asin=asin, includedData=['attributes', 'images', 'productTypes', 'summaries'])
-            return details.payload
+            details = details.payload['attributes']
+            weight = details.get('item_package_weight', [{'value': -1}])[0]['value']
+
+            if weight == 0 or weight == -1:
+                weight = details.get('item_weight', [{'value': -1}])[0]['value']
+                result['weight'] = weight
+
+            weight_unit = details.get('item_package_weight', [{'unit': ''}])[0]['unit']
+            if not weight_unit:
+                weight_unit = details.get('item_weight', [{'unit': ''}])[0]['unit']
+                result['weight_unit'] = weight_unit
+
+            images = details[0]['images']
+            if images == []:
+                image_url = ''
+                print(f'No image_url found for ASIN {asin}')
+            else:
+                image_url = images[0]['link']
+                result['image_url'] = image_url
+            
+            return result
+
         except SellingApiRequestThrottledException:
             print("Quota exceeded, waiting for 60 seconds before retrying...")
             time.sleep(60)
-            return self.fetch_product_details(asin)
+            return self.request_product_details(asin)
 
-    def get_product_price(self, asin):
+    def request_product_price(self, asin):
         try:
             products = Products(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token'])
             price = products.get_item_offers(asin, item_condition='New')
@@ -29,9 +51,9 @@ class AmazonAPIClient:
         except SellingApiRequestThrottledException:
             print("Quota exceeded, waiting for 60 seconds before retrying...")
             time.sleep(60)
-            return self.get_product_price(asin)
+            return self.request_product_price(asin)
         
-    def get_product_fees(self, asin, price):
+    def request_product_fees(self, asin, price):
         try:
             product_fees = ProductFees(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token'])
             fees = product_fees.get_product_fees_estimate_for_asin(asin, price=price, shipping=0, currency='JPY', is_fba=True)
@@ -39,7 +61,7 @@ class AmazonAPIClient:
         except SellingApiRequestThrottledException:
             print("Quota exceeded, waiting for 60 seconds before retrying...")
             time.sleep(60)
-            return self.get_product_fees(asin)
+            return self.request_product_fees(asin)
         
 #for test
 import os
@@ -53,8 +75,8 @@ def test(asin):
         'marketplace': os.getenv('SP_API_DEFAULT_MARKETPLACE')
     }
     api_client = AmazonAPIClient(**sp_credentials)
-    price  = api_client.get_product_price(asin)
-    fee = api_client.get_product_fees(asin, price)
+    price  = api_client.request_product_price(asin)
+    fee = api_client.request_product_fees(asin, price)
     print(price)
     print(fee)
 
@@ -63,19 +85,28 @@ if __name__ == '__main__':
 
 
 
-class RepositoryForSpAPI:
+        
+class RepositoryToGet:
     def __init__(self, db_client):
         self.db_client = db_client
-    
-    def fetch_products(self):
-        query = "SELECT id, asin FROM products_master WHERE weight IS NULL"
+    # record_products_master = {'id', 'asin', 'weight', 'weight_unit', 'image_url', 'last_search', 'is_good'}
+    # record_products_detail = {'id', 'asin_id', 'ec_url_id', 'product_price', 'research_date', 'three_month_sales', 'competitors', 'sales_price', 'expected_import_fees', 'expected_roi', 'decision', 'final_dicision'} 
+
+    # get products_master to process
+    def get_product_to_process(self):
+        query = "SELECT * FROM products_master WHERE weight IS NULL"
         return self.db_client.execute_quaery(query)
 
-    def get_product_price(self, asin):
-        query = "SELECT product_price FROM products_detail WHERE asin = %s AND commission IS NULL"
-        return self.db_client.execute_query(query, (asin,))
+    # get latest product price
+    def get_product_price(self, asin_id):
+        query = "SELECT * FROM products_detail WHERE asin_id = %s AND commission IS NULL"
+        return self.db_client.execute_query(query, (asin_id,))
 
-    def update_product(self, product_id, weight, weight_unit, image_url):
+class RepositoryToUpdate:
+    def __init__(self, db_client):
+        self.db_client = db_client
+
+    def update_product(self, record):
         query = """
             UPDATE products_master
             SET weight = %s,
@@ -84,12 +115,14 @@ class RepositoryForSpAPI:
             last_search = NOW()
             WHERE id = %s;
         """
-        params = (weight, weight_unit, image_url, product_id)
+        params = (record['weight'], record['weight_unit'], record['image_url'], record['product_id'])
         return self.db_client.execute_update(query, params)
-    
-    def update_product_price(self, asin, price):
-        query = "UPDATE products_detail SET product_price = %s WHERE asin = %s"
-        return self.db_client.execute_update(query, (price, asin))
+
+    def update_product_price(self, asin_id, product_price):
+        #asin_id = record['asin_id']
+        #product_price = record['product_price']
+        query = "UPDATE products_detail SET product_price = %s WHERE asin_id = %s"
+        return self.db_client.execute_update(query, (product_price, asin_id))
     
     def update_product_fees(self, asin, fees):
         query = "UPDATE products_detail SET commission = %s WHERE asin = %s AND commission IS NULL"
@@ -98,56 +131,38 @@ class RepositoryForSpAPI:
 class AmazonFacade:
     def __init__(self, refresh_token, lwa_app_id, lwa_client_secret, marketplace, database_client):
         self.api_client = AmazonAPIClient(refresh_token, lwa_app_id, lwa_client_secret, marketplace)
-        self.repository = RepositoryForSpAPI(database_client)
+        self.get = RepositoryToGet(database_client)
+        self.update = RepositoryToUpdate(database_client)
 
-    def update_product_details(self, product):
-        product_details = self.api_client.fetch_product_details(product)
-        self.api_client.product_details_updater(product_details)
+    def get_product_to_process(self):
+        return self.get.get_product_to_process()
 
-    # update products_detail set product_price = price where asin = asin
-    def update_procuct_price(self, asin, price):
-        lowest_price = self.api_client.update_product_price(asin, price)
-        self.repository.update_product_price(asin, lowest_price)
-        fees = self.api_client.get_product_fees(asin, lowest_price)
-        self.repository.update_product_fees(asin, fees)
+    def process_product_detail(self):
+        record = self.get.get_product_to_process()
+        record = self.api_client.request_product_details(record)
+        return record
+        self.update.update_product(record)
 
-    # get product_detail through API and update products_master
-    def fetch_product_details(self, product):
-        product_id, asin = product['id'], product['asin']
-        details = self.api_client.fetch_product_details(asin)
+    def process_sales_price(self, record):
+        sales_price = self.api_client.request_product_price(record['asin'])
+        record['sales_price'] = sales_price
+        self.update.update_product_price(record['asin_id'], sales_price)
+        return record
 
-        weight = details['attributes'].get('item_package_weight', [{'value': -1}])[0]['value']
-        if weight == 0 or weight == -1:
-            weight = details['attributes'].get('item_weight', [{'value': -1}])[0]['value']
+    def process_commission(self, record):
+        commission = self.api_client.request_product_fees(record['asin_id'], record['product_price'])
+        record['commission'] = commission
+        self.update.update_product_fees(record)
+        return record
+        
 
-        weight_unit = details['attributes'].get('item_package_weight', [{'unit': ''}])[0]['unit']
-        if not weight_unit:
-            weight_unit = details['attributes'].get('item_weight', [{'unit': ''}])[0]['unit']
 
-        images = details['images'][0]['images']
-        if images == []:
-            image_url = ''
-            print(f'No image_url found for ASIN {asin}')
-        else:
-            image_url = images[0]['link']
-
-        print(f'ASIN {asin} weights {weight}{weight_unit}')
-        details = {'id':product_id, 'asin':asin, 'weight':weight, 'weight_unit':weight_unit, 'image_url':image_url}
-        self.product_details_updater(details)
-        return details
-    # called by fetch_product_details
-    def product_details_updater(self, product_details):
-        self.repository.update_product(
-            product_details['id'],
-            product_details['weight'],
-            product_details['weight_unit'],
-            product_details['image_url']
-        )
-
-    def update_product_fee(self, asin):
-        price = self.repository.get_product_price(asin)
-        fees = self.api_client.get_product_fees(asin, price)
-        self.repository.update_product_fees(asin, fees)
-
+'''
+    # compound to process_product_price_and_fees()
+    def process_product_fees(self, asin):
+        price = self.get.get_product_price(asin)
+        fees = self.api_client.request_product_fees(asin, price)
+        self.update.update_product_fees(asin, fees)
+'''
 def sp_api(refresh_token, lwa_app_id, lwa_client_secret, marketplace, database_client):
     return AmazonFacade(refresh_token, lwa_app_id, lwa_client_secret, marketplace, database_client)

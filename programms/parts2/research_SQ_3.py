@@ -44,49 +44,48 @@ def main():
     }
     sp_api = sp_api_client.sp_api(**sp_credentials, database_client=db_client)
 
-    searcher = vision.image_searcher()
-    service = vision.image_search_service(vision.repository_to_search_image(db_client), searcher)
+    searcher = vision.image_searcher(db_client)
 
     scraper = ec_scraper.get_scraper()
 
     calc = calculator.calculator(db_client)
 
-    products = sp_api.fetch_product_details()
-    if not products:
+    # record_products_master = {'id', 'asin', 'weight', 'weight_unit', 'image_url', 'last_search', 'is_good'}
+    records_products_master = sp_api.get.get_product_to_process()
+
+    if not records_products_master:
         print("No products to process")
 
-    # product = {'id', 'asin', 'image_url'}
+    # record : products_master object
     # details = {'id', 'asin', 'weight', 'weight_unit', 'image_url'}
     # sales_rank_drops = {'asin', 'sales_rank_drops'}
-    for product in products:
-        details = sp_api.fetch_product_details(product)
-        sales_rank_drops = sales_rank_updater.get_sales_rank(details['asin'])
-        sales_rank_updater.update_sales_rank(sales_rank_drops['asin'], sales_rank_drops['sales_rank_drops'])
-        if sales_rank_drops['sales_rank_drops'] == 0 or sales_rank_drops['sales_rank_drops'] > 200:
-            vision.repository_to_search_image.update_product_status(details['id'])
+    for record_product_master in records_products_master:
+        # fill product_master {'weight', 'weight_unit', 'image_url'}
+        record_product_master = sp_api.process_product_detail(record_product_master)
+        # fill product_detail {'three_month_sales'}
+
+        #record_product_detail = {'id':'', 'asin_id':'', 'ec_url_id':'', 'product_price':'', 'research_date':'', 'three_month_sales':'', 'competitors':'', 'sales_price':'', 'commission':'', 'expected_import_fees':'', 'expected_roi':'', 'decision':'', 'final_dicision':''}
+        record_product_detail = sales_rank_updater.process_sales_rankd_drops(record)
+
+        # fill product_detail {'ec_search'}
+        # fill product_ec {'id', 'asin_id', 'ec_url'}
+        if record_product_detail['three_month_sales'] == 0 or record_product_detail['three_month_sales'] > 200:
+            searcher.update.update_product_status(record_product_detail['id'])
         else:
-            service.process_product(details)
+            searcher.process_image_url(record)
 
-        ec_urls = scraper.get_ec_urls(details['id'])
-        for ec_url in ec_urls:
-            scraper.scrape_and_save(ec_url)
+        # fill prouct_ec {'price', 'currency', 'availability'}
+        records_product_ec = scraper.get_ec_urls(record)
+        for record in records_product_ec:
+            scraper.scrape_and_save(record)
 
-        # fill products_detail(product_price)
-        product_price = calc.update_product_prices(details['id'])
-
-
-        # fill products_detail(commission)
-        sp_api.update_product_price(details['id'], product_price)
-        # fill products_detail(expected_import_fees)
-        calc.update_expected_import_fees(details['id'])
-        #fill products_detail(expected_roi)
-        calc.update_expected_roi(details['id'])
-        # fill products_detail(dicision)
-        calc.update_product_dicision(details['id'])
-
-
-        # all_details = calc.get_all_details(details['asin'])
-        # calc.calc_all_details(all_details)  
+        # fill products_detail {'product_price'} {'sales_price'} {'commission'} {'expected_import_fees'}
+        record_product_detail = calc.process_product_price(record_product_detail)
+        record_product_detail = calc.process_sales_price(record_product_detail)
+        record_product_detail = sp_api.process_commission(record_product_detail)
+        record_product_detail = calc.process_expected_import_fees(record_product_master, record_product_detail)
+        record_product_detail = calc.process_expected_roi(record_product_detail)
+        record_product_detail = calc.process_product_decision(record_product_detail)
 
     db_client.close()
 

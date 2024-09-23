@@ -47,7 +47,7 @@ erDiagram
 
     products_ec {
         bigint id PK "auto increment"
-        bigint asin_id FK "ASIN:products_master.id: not null"
+        bigint asin_id FK "products_master.id: not null"
         int price
         string price_unit
         bool availability "仕入れ可能か"
@@ -68,7 +68,7 @@ erDiagram
         timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
-        int lowest_price "競合最低出品価格"
+        int sales_price "競合最低出品価格"
         int commission "FBA手数料"
         float expected_import_fees "予想仕入値"
         float expexted_roi "予想利益率"

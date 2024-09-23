@@ -28,10 +28,50 @@ class ImageSearcher:
 
         return ec_urls if ec_urls else None
     
+
+
+class RepositoryToGet:
+    def __init__(self, db_client):
+        self.db = db_client
+
+    def get_positive_list(self):
+        query = "SELECT ec_site FROM ec_sites WHERE to_research = TRUE"
+        return [item['ec_site'] for item in self.db.execute_query(query)]
+
+    def get_products_to_process(self):
+        query = "SELECT * FROM products_master WHERE ec_search IS NULL AND image_url IS NOT NULL"
+        return self.db.execute_query(query)
+    
+    # 統合の際にget_products_to_processと置換
+    def get_product_to_process(self, record):
+        query = "SELECT * FROM products_master WHERE asin = %s"
+        return self.db.execute_query(query, (record['asin'], ))
+    
+
+class RepositoryToUpdate:
+    def __init__(self, db_client):
+        self.db_client = db_client
+
+    def update_ec_url(self, record):
+        asin_id = record['asin_id']
+        ec_url = record['ec_url']
+        query = "SELECT * FROM products_ec WHERE asin_id = %s AND ec_url = %s"
+        if not self.db.execute_query(query, (asin_id, ec_url)):
+            insert_query = "INSERT INTO products_ec (asin_id, ec_url) VALUES (%s, %s)"
+            self.db.execute_update(insert_query, (asin_id, ec_url))
+        else:
+            print("URL already exists in the database")
+
+    def update_product_status(self, record):
+        update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
+        self.db.execute_update(update_query, (record['id'],))
+    
+
 class ImageSearchService:
-    def __init__(self, repository_search_image, searcher):
-        self.repository_search_image = repository_search_image
-        self.searcher = searcher
+    def __init__(self, database_client):
+        self.searcher = ImageSearcher()
+        self.get = RepositoryToGet(database_client)
+        self.update = RepositoryToUpdate(database_client)
     
     def check_urls(self, url):
         patterns = {
@@ -45,56 +85,17 @@ class ImageSearchService:
             else:
                 return False
             
-    def process_product(self, product):
-        product_id = product['id']
-        image_url = product['image_url']
-        print(f'Processing product_id: {product_id}, image_url: {image_url}')
-
-        positive_list = self.repository_search_image.get_positive_list()
-        ec_urls = self.searcher.search_image(image_url, positive_list)
-        print(f'Found ec_url: {ec_urls}')
-        
+    def process_image_url(self, record):
+        positive_list = self.get.get_positive_list()
+        ec_urls = self.searcher.search_image(record['image_url'], positive_list)
+        record_product_ec = {'id': '', 'asin_id': record['id'], 'price':'', 'price_unit':'', 'availability':'', 'ec_url':''}
         for ec_url in ec_urls:
             if self.check_urls(ec_url):
-                self.repository_search_image.save_ec_url(product_id, ec_url)
+                record_product_ec['ec_url'] = ec_url
+                self.update.update_ec_url(record_product_ec)
             else:
                 print("No matching URL found")
-            self.repository_search_image.update_product_status(product_id) 
+            self.update.update_product_status(record) 
 
-def image_searcher():
-    return ImageSearcher()
-
-def image_search_service(repository_search_image, searcher=ImageSearcher()):
-    return ImageSearchService(repository_search_image, searcher)
-
-class RepositoryToSearchImage:
-    def __init__(self, db_client):
-        self.db = db_client
-
-    def get_positive_list(self):
-        query = "SELECT ec_site FROM ec_sites WHERE to_research = TRUE"
-        return [item['ec_site'] for item in self.db.execute_query(query)]
-
-    def get_products_to_process(self):
-        query = "SELECT id, image_url FROM products_master WHERE ec_search IS NULL AND image_url IS NOT NULL"
-        return self.db.execute_query(query)
-    
-    # 統合の際にget_products_to_processと置換
-    def get_product_to_process(self, asin):
-        query = "SELECT image_url FROM products_master WHERE asin = %s"
-        return self.db.execute_query(query, (asin, ))
-
-    def save_ec_url(self, product_id, ec_url):
-        query = "SELECT * FROM products_ec WHERE asin_id = %s AND ec_url = %s"
-        if not self.db.execute_query(query, (product_id, ec_url)):
-            insert_query = "INSERT INTO products_ec (asin_id, ec_url) VALUES (%s, %s)"
-            self.db.execute_update(insert_query, (product_id, ec_url))
-        else:
-            print("URL already exists in the database")
-
-    def update_product_status(self, product_id):
-        update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
-        self.db.execute_update(update_query, (product_id,))
-
-def repository_to_search_image(db_client):
-    return RepositoryToSearchImage(db_client)
+def image_searcher(database_client):
+    return ImageSearchService(database_client)

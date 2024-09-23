@@ -107,11 +107,12 @@ class Repository:
     def __init__(self, database_client):
         self.database_client = database_client
     
-    def get_ec_urls(self, asin_id):
-        query = f"SELECT ec_url FROM products_ec WHERE asin_id = {asin_id}"
+    def get_ec_urls(self, record):
+        asin_id = record['id']
+        query = f"SELECT * FROM products_ec WHERE asin_id = {asin_id}"
         return self.database_client.execute_query(query)
     
-    def save_ec_url(self, asin_id, data):
+    def update_ec_url(self, asin_id, data):
         price = data['price']
         price_unit = data['currency']
         availability = data['availability']
@@ -122,7 +123,9 @@ class ScraperFacade:
     def __init__(self, database_client):
         self.repository = Repository(database_client)
 
-    def scrape_and_save(self, asin_id, url):
+    def scrape_and_save(self, record):
+        asin_id = record['id']
+        url = record['ec_url']
         if 'amazon' in url:
             dataset_id = 'gd_l7q7dkf244hwjntr0'
             ec_site = 'amazon'
@@ -139,7 +142,7 @@ class ScraperFacade:
         data = scraper.get_detail(snapshot_id)
         data_scraped = scraper.get_data(data)
         data_scraped['ec_url'] = url
-        self.repository.save_ec_url(asin_id, data_scraped)
+        self.repository.update_ec_url(asin_id, data_scraped)
 
 
 def get_scraper():

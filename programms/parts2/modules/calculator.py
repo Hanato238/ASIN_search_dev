@@ -4,17 +4,15 @@ import yfinance as yf
 
 dotenv.load_dotenv()
 
-class RespositoryForCalc:
+
+
+class RepositoryToGet:
     def __init__(self, db_client):
         self.db_client = db_client
 
     def get_product_prices(self, asin_id):
         query = "SELECT id, price, price_unit FROM products_ec WHERE asin_id = %s"
         return self.db_client.execute_query(query, (asin_id,))
-
-    def update_product_price(self, asin_id, product_price):
-        query = "UPDATE products_master SET product_price = %s WHERE asin_id = %s"
-        self.db_client.execute_update(query, (product_price, asin_id))
     
     # is_good=NULL or Trueのidをproducts_masterから取得
     def get_products_to_evaluate(self):
@@ -30,10 +28,6 @@ class RespositoryForCalc:
         LIMIT 3
         """
         return self.db_client.execute_query(query, (product_id,))
-
-    def update_product_is_good(self, product_id):
-        query = "UPDATE products_master SET is_good = 1 WHERE id = %s"
-        self.db_client.execute_update(query, (product_id,))
 
     # is_good=NULL or Trueのidをsellersから取得
     def get_sellers_to_evaluate(self):
@@ -55,7 +49,19 @@ class RespositoryForCalc:
     def get_expected_import_fees(self, asin_id):
         query = "SELECT expected_import_fees FROM products_detail WHERE asin_id = %s AND expected_import_fees IS NOT NULL"
         return self.db_client.execute_query(query, (asin_id,))
-        
+
+class RepositoryToUpdate:
+    def __init__(self, db_client):
+        self.db_client = db_client
+
+    def update_product_price(self, asin_id, product_price):
+        query = "UPDATE products_master SET product_price = %s WHERE asin_id = %s"
+        self.db_client.execute_update(query, (product_price, asin_id))
+
+    def update_product_is_good(self, product_id):
+        query = "UPDATE products_master SET is_good = 1 WHERE id = %s"
+        self.db_client.execute_update(query, (product_id,))
+
     def update_seller_is_good(self, seller_id):
         query = "UPDATE sellers SET is_good = 1 WHERE id = %s"
         self.db_client.execute_update(query, (seller_id,))
@@ -64,27 +70,26 @@ class RespositoryForCalc:
         query = "UPDATE products_detail SET product_price = %s WHERE asin_id = %s"
         self.db_client.execute_update(query, (price, asin_id))
 
-    def update_expected_import_fees(self, asin_id, price):
-        query = "UPDATE products_detail SET expected_import_fees = %s WHERE asin_id = %s"
-        self.db_client.execute_update(query, (price, asin_id))
+    def update_expected_import_fees(self, id, price):
+        query = "UPDATE products_detail SET expected_import_fees = %s WHERE id = %s"
+        self.db_client.execute_update(query, (price, id))
 
     def update_expected_roi(self, asin_id, roi):
         query = "UPDATE products_detail SET expected_roi = %s WHERE asin_id = %s AND expected_roi IS NULL"
         self.db_client.execute_update(query, (roi, asin_id))
 
-    def update_product_decision(self, asin_id, roi):
-        if roi > 0.2:
-            decision = 1
-        else:
-            decision = 0
-        query = "UPDATE products_detail SET decision = %s WHERE asin_id = %s"
-        self.db_client.execute_update(query, (decision, asin_id))
+    def update_product_decision(self, record, decision):
+        id = record['id']
+        query = "UPDATE products_detail SET decision = %s WHERE id = %s"
+        self.db_client.execute_update(query, (decision, id))
+
+
 
 class EvaluateAsinAndSellers:
     def __init__(self, repository):
         self.repository = repository
     
-    def get_product_price(self, prices):
+    def evaluate_product_price(self, prices):
         prices_in_jpy = []
         for price, price_unit in prices:
             converter = CurrencyConverter(f'{price_unit}JPY=X')
@@ -125,36 +130,56 @@ class CurrencyConverter:
     
 class Calculator:
     def __init__(self, db_client):
-        self.repository = RespositoryForCalc(db_client)
         self.evaluator = EvaluateAsinAndSellers(self.repository)
+        self.get = RepositoryToGet(db_client)
+        self.update = RepositoryToUpdate(db_client)
 
-    def update_product_price(self, asin_id):
-        prices = self.repository.get_product_prices(asin_id)
-        product_price = self.evaluator.get_product_price(prices)
-        self.repository.update_product_price(asin_id, product_price)
-        return product_price
+    def process_product_price(self, record):
+        asin_id = record['id']
+        prices = self.get.get_product_prices(asin_id)
+        product_price = self.evaluator.evaluate_product_price(prices)
+        self.update.update_product_price(asin_id, product_price)
+        record['product_price'] = product_price
+        return record
     
-    def update_expected_import_fees(self, asin_id):
-        import_tax = self.repository.get_product_prices(asin_id)*2
-        weights = self.repository.get_product_weight(asin_id)
-        for weight, weight_unit in weights:
-            if weight_unit == 'kilograms':
-                weight = weight*1000 # kilo/gram
-            elif weight_unit == 'pounds':
-                weight = weight*453.6 # pound/gram
-            elif weight_unit == 'ounces':
-                weight = weight*28.35 # ounce/gram
-            elif weight_unit == 'grams':
-                weight = weight
-            else:
-                raise ValueError('Invalid weight unit')
+    def process_expected_import_fees(self, record_product_master, record_product_detail):
+        import_tax = record_product_detail['product_price'] * 0.1
+        weight = record_product_master['weight']
+        weight_unit = record_product_master['weight_unit']
+
+        if weight_unit == 'kilograms':
+            weight = weight*1000 # kilo/gram
+        elif weight_unit == 'pounds':
+            weight = weight*453.6 # pound/gram
+        elif weight_unit == 'ounces':
+            weight = weight*28.35 # ounce/gram
+        elif weight_unit == 'grams':
+            weight = weight
+        else:
+            raise ValueError('Invalid weight unit')
+        
         expected_import_fees = import_tax + weight * 2
-        self.repository.update_expected_import_fees(asin_id, expected_import_fees)
-        return expected_import_fees
+        record_product_detail['expected_import_fees'] = expected_import_fees
+        detail_id = record_product_master['id']
+        self.update.update_expected_import_fees(detail_id, expected_import_fees)
+        return record_product_detail
     
-    def update_expected_roi(self, asin_id):
-        product_price = self.repository.get_product_prices(asin_id)
-        expected_import_fees = self.repository.get_expected_import_fees(asin_id)
-        roi = (expected_import_fees - product_price) / product_price
-        self.repository.update_expected_roi(asin_id, roi)
-        return roi
+    def process_expected_roi(self, record):
+        sales_price = record['sales_price']
+        product_price = record['product_price']
+        commission = record['commission']
+        expected_import_fees = record['expected_import_fees']
+        roi = (sales_price - product_price - commission - expected_import_fees) / sales_price
+        record['expected_roi'] = roi
+        self.update.update_expected_roi(record['id'], roi)
+        self.update.update_product_decision(record['id'], roi)
+        return record
+    
+    def process_product_decision(self, record):
+        if record['expected_roi'] > 0.3:
+            decision = 1
+        else:
+            decision = 0
+        self.update.update_product_decision(record, decision)
+        return record
+        
