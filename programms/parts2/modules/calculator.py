@@ -54,10 +54,6 @@ class RepositoryToUpdate:
     def __init__(self, db_client):
         self.db_client = db_client
 
-    def update_product_price(self, asin_id, product_price):
-        query = "UPDATE products_master SET product_price = %s WHERE asin_id = %s"
-        self.db_client.execute_update(query, (product_price, asin_id))
-
     def update_product_is_good(self, product_id):
         query = "UPDATE products_master SET is_good = 1 WHERE id = %s"
         self.db_client.execute_update(query, (product_id,))
@@ -66,9 +62,12 @@ class RepositoryToUpdate:
         query = "UPDATE sellers SET is_good = 1 WHERE id = %s"
         self.db_client.execute_update(query, (seller_id,))
 
-    def update_product_price(self, asin_id, price):
-        query = "UPDATE products_detail SET product_price = %s WHERE asin_id = %s"
-        self.db_client.execute_update(query, (price, asin_id))
+    def update_product_price(self, id, price):
+        query = """
+            UPDATE products_detail 
+            SET ec_url_id = %s, product_price = %s
+            WHERE id = %s"""
+        self.db_client.execute_update(query, (price['id'], price['price_in_jpy'], id))
 
     def update_expected_import_fees(self, id, price):
         query = "UPDATE products_detail SET expected_import_fees = %s WHERE id = %s"
@@ -89,13 +88,19 @@ class EvaluateAsinAndSellers:
     def __init__(self, repository):
         self.repository = repository
     
-    def evaluate_product_price(self, prices):
-        prices_in_jpy = []
-        for price, price_unit in prices:
-            converter = CurrencyConverter(f'{price_unit}JPY=X')
-            price_in_jpy = converter.convert_price(price)
-            prices_in_jpy.append(price_in_jpy)
-        return min(prices_in_jpy)
+def evaluate_product_price(self, prices):
+    min_price_in_jpy = float('inf')
+    min_price_product = {'id': '', 'price_in_jpy': 0}
+    
+    for id, price, price_unit in prices:
+        converter = CurrencyConverter(f'{price_unit}JPY=X')
+        price_in_jpy = converter.convert_price(price)
+        
+        if price_in_jpy < min_price_in_jpy:
+            min_price_in_jpy = price_in_jpy
+            min_price_product = {'id': id, 'price_in_jpy': price_in_jpy}
+    
+    return min_price_product
 
     def evaluate_products(self):
         products = self.repository.get_products_to_evaluate()
@@ -135,11 +140,13 @@ class Calculator:
         self.update = RepositoryToUpdate(db_client)
 
     def process_product_price(self, record):
-        asin_id = record['id']
+        asin_id = record['asin_id']
+        detail_id = record['id']
         prices = self.get.get_product_prices(asin_id)
-        product_price = self.evaluator.evaluate_product_price(prices)
-        self.update.update_product_price(asin_id, product_price)
-        record['product_price'] = product_price
+        product_prices = self.evaluator.evaluate_product_price(prices)
+        self.update.update_product_price(detail_id, product_prices)
+        record['product_price'] = product_prices['price_in_jpy']
+        record['ec_url_id'] = product_prices['id']
         return record
     
     def process_expected_import_fees(self, record_product_master, record_product_detail):

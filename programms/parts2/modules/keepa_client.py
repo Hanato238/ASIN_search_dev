@@ -50,129 +50,9 @@ class KeepaClient:
         products = self.api.query(asin, domain='JP', stats=90)
         return products[0]['stats']['salesRankDrops90']
     
-class AsinSearcher:
-    def __init__(self, db_client, keepa_client):
-        self.db_client = db_client
-        self.keepa_client = keepa_client
 
-    def process_seller(self, seller):
-        sellerId = seller['seller']
-        asins = self.keepa_client.search_asin_by_seller(sellerId)
-        if len(asins) == 0:
-            print(f'{sellerId} has NO Asins')
-            return
-        
-        print(f'{sellerId} has Asins')
-        for asin in asins:
-            self.db_client.add_product_master(asin)
-            asin_id = self.db_client.get_product_id(asin)
-            if asin_id:
-                self.db_client.add_product_detail(asin_id)
-                self.db_client.write_asin_to_junction(sellerId, asin_id)
 
-class SellerSearcher:
-    def __init__(self, repository, keepa_client):
-        self.repository = repository
-        self.api = keepa_client
-
-    def search_seller(self, product):
-        print(f'asin : {product["asin"]}')
-        asin = product['asin']
-        product_id = product['id']
-        seller_info = self.api.query_seller_info(asin)
-        extracted_data = self.extract_info(seller_info[0]['offers'])
-
-        competitors = self.count_FBA_sellers(extracted_data)
-        self.repository.create_record_to_products_detail(product_id, competitors)
-
-        if not extracted_data:
-            print(f"ASIN: {asin} のsellerIDが見つかりませんでした")
-            return
-
-        for datum in extracted_data:
-            seller = datum["sellerId"]
-            count = self.repository.get_seller_count(seller)
-
-            if count == 0:
-                print(f'add sellerId : {seller}')
-                self.repository.add_seller(seller)
-
-            seller_id = self.repository.get_seller_id(seller)
-            self.repository.add_junction(seller_id, product_id)
-        print(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
-
-    def extract_info(self, data):
-        result = []
-        for item in data:
-            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
-                result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
-        return result
-    
-    def count_FBA_sellers(self, data):
-        # Check if any element has isAmazon set to True
-        for item in data:
-            if item['isAmazon']:
-                return 1000
-    
-        # Count elements where isPrime is True
-        prime_count = sum(1 for item in data if item['isPrime'])
-        return prime_count
-
-class SalesRankUpdater:
-    def __init__(self, db_client, keepa_client):
-        self.repository = RepositoryToGetSales(db_client)
-        self.keepa_client = keepa_client
-
-    def process_sales_rankd_drops(self, record):
-        asin_id = record['id']
-        record = self.repository.get_record_without_sales_rank(asin_id)
-        record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(record['asin'])
-        self.repository.update_sales_rank(record)
-        return record
-
-def keepa_client(api_key):
-    return KeepaClient(api_key)
-
-def asin_searcher(db_client, keepa_client=KeepaClient(os.getenv('KEEPA_API_KEY'))):
-    return AsinSearcher(db_client, keepa_client)
-
-def seller_searcher(repository, keepa_client=KeepaClient(os.getenv('KEEPA_API_KEY'))):
-    return SellerSearcher(repository, keepa_client)
-
-def sales_rank_updater(db_client, keepa_client=KeepaClient(os.getenv('KEEPA_API_KEY'))):
-    return SalesRankUpdater(db_client, keepa_client)
-
-class RepositoryToGetSeller:
-    def __init__(self, db_client):
-        self.db = db_client
-
-    def get_all_products(self):
-        query = "SELECT id, asin FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
-        return self.db.execute_query(query)
-
-    def get_seller_count(self, seller):
-        count_query = "SELECT COUNT(*) FROM sellers WHERE seller = %s"
-        return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
-
-    def add_seller(self, seller):
-        insert_query = "INSERT INTO sellers (seller) VALUES (%s)"
-        self.db.execute_update(insert_query, (seller,))
-
-    def get_seller_id(self, seller):
-        seller_id_query = "SELECT id FROM sellers WHERE seller = %s"
-        return self.db.execute_query(seller_id_query, (seller,))[0]['id']
-
-    def add_junction(self, seller_id, product_id):
-        junction_query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
-        self.db.execute_update(junction_query, (seller_id, product_id))
-
-    def create_record_to_products_detail(self, product_id, competitors):
-        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
-        self.db.execute_update(query, (product_id, competitors))
-
-def repository_to_get_seller(db_client):
-    return RepositoryToGetSeller(db_client)
-
+#------------------------------------------------------------
 class RepositoryToGetAsin:
     def __init__(self, db_client):
         self.db_client = db_client
@@ -210,9 +90,114 @@ class RepositoryToGetAsin:
         """
         self.db_client.execute_update(insert_query, (asin_id,))
 
-def repository_to_get_asin(db_client):
-    return RepositoryToGetAsin(db_client)
+class AsinSearcher:
+    def __init__(self, db_client, keepa_client):
+        self.repository = RepositoryToGetAsin(db_client)
+        self.keepa_client = keepa_client
 
+    def process_seller(self):
+        sellers = self.repository.get_sellers()
+        for seller in sellers:
+            asins = self.keepa_client.search_asin_by_seller(seller)
+            if len(asins) == 0:
+                print(f'{seller} has NO Asins')
+                return
+        
+            print(f'{seller} has Asins')
+            for asin in asins:
+                self.repository.add_product_master(asin)
+                asin_id = self.repository.get_product_id(asin)
+                if asin_id:
+                    self.repository.add_product_detail(asin_id)
+                    self.repository.write_asin_to_junction(seller, asin_id)
+
+def asin_searcher(db_client, keepa_client):
+    return AsinSearcher(db_client, keepa_client)
+
+
+#------------------------------------------------------------
+class RepositoryToGetSeller:
+    def __init__(self, db_client):
+        self.db = db_client
+
+    def get_all_products(self):
+        query = "SELECT id, asin FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
+        return self.db.execute_query(query)
+
+    def get_seller_count(self, seller):
+        count_query = "SELECT COUNT(*) FROM sellers WHERE seller = %s"
+        return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
+
+    def add_seller(self, seller):
+        insert_query = "INSERT INTO sellers (seller) VALUES (%s)"
+        self.db.execute_update(insert_query, (seller,))
+
+    def get_seller_id(self, seller):
+        seller_id_query = "SELECT id FROM sellers WHERE seller = %s"
+        return self.db.execute_query(seller_id_query, (seller,))[0]['id']
+
+    def add_junction(self, seller_id, product_id):
+        junction_query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
+        self.db.execute_update(junction_query, (seller_id, product_id))
+
+    def create_record_to_products_detail(self, product_id, competitors):
+        query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
+        self.db.execute_update(query, (product_id, competitors))
+
+class SellerSearcher:
+    def __init__(self, database_client, keepa_client):
+        self.repository = RepositoryToGetSeller(database_client)
+        self.api = keepa_client
+
+    def process_search_seller(self, product):
+        products = self.repository.get_all_products()
+        for product in products:
+            print(f'asin : {product["asin"]}')
+            asin = product['asin']
+            product_id = product['id']
+            seller_info = self.api.query_seller_info(asin)
+            extracted_data = self.extract_info(seller_info[0]['offers'])
+
+            competitors = self.count_FBA_sellers(extracted_data)
+            self.repository.create_record_to_products_detail(product_id, competitors)
+
+            if not extracted_data:
+                print(f"ASIN: {asin} のsellerIDが見つかりませんでした")
+                return
+
+            for datum in extracted_data:
+                seller = datum["sellerId"]
+                count = self.repository.get_seller_count(seller)
+
+                if count == 0:
+                    print(f'add sellerId : {seller}')
+                    self.repository.add_seller(seller)
+
+                seller_id = self.repository.get_seller_id(seller)
+                self.repository.add_junction(seller_id, product_id)
+            print(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
+
+    def extract_info(self, data):
+        result = []
+        for item in data:
+            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
+                result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
+        return result
+    
+    def count_FBA_sellers(self, data):
+        # Check if any element has isAmazon set to True
+        for item in data:
+            if item['isAmazon']:
+                return 1000
+    
+        # Count elements where isPrime is True
+        prime_count = sum(1 for item in data if item['isPrime'])
+        return prime_count
+
+def seller_searcher(database_client, keepa_client):
+    return SellerSearcher(database_client, keepa_client)
+
+#------------------------------------------------------------
 class RepositoryToGetSales:
     def __init__(self, db_client):
         self.db_client = db_client
@@ -233,3 +218,19 @@ class RepositoryToGetSales:
             WHERE id = %s;
         """
         self.db_client.execute_update(insert_query, (three_month_sales, id))
+
+class SalesRankUpdater:
+    def __init__(self, db_client, keepa_client):
+        self.repository = RepositoryToGetSales(db_client)
+        self.keepa_client = keepa_client
+
+    def process_sales_rankd_drops(self, record):
+        asin_id = record['id']
+        record = self.repository.get_record_without_sales_rank(asin_id)
+        record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(record['asin'])
+        self.repository.update_sales_rank(record)
+        return record
+
+def sales_rank_updater(database_client, keepa_client):
+    return SalesRankUpdater(database_client, keepa_client)
+

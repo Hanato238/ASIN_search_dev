@@ -34,8 +34,8 @@ erDiagram
         float weight "商品重量"
         varchar weight_unit "重量単位: [kilograms, grams, pound]"
         string image_url "商品画像URL"
+        bool ec_search "image_urlでサーチ済みか"
         timestamp last_search "最終検索日時: not null"
-        timestamp last_sellers_search "最終seller検索日時: not null"
         bool is_good "継続的な検索対象にするか"
     }
 

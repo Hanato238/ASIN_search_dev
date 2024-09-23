@@ -3,29 +3,12 @@ import keepa
 import os
 import dotenv
 
+import modules.database_client as db
+import modules.keepa_client as keepa
+
 dotenv.load_dotenv()
 
-class DatabaseClient:
-    def __init__(self, host, user, password, database):
-        self.connection = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database
-        )
-        self.cursor = self.connection.cursor(dictionary=True)
 
-    def execute_query(self, query, params=None):
-        self.cursor.execute(query, params or ())
-        return self.cursor.fetchall()
-
-    def execute_update(self, query, params=None):
-        self.cursor.execute(query, params or ())
-        self.connection.commit()
-
-    def close(self):
-        self.cursor.close()
-        self.connection.close()
 
 class KeepaClient:
     def __init__(self, api_key):
@@ -157,15 +140,15 @@ def main():
         "password": os.getenv("DB_PASS"),
         "database": os.getenv("DB_NAME")
     }
-    db_client = DatabaseClient(**db_config)
-    repository = RepositoryToGetSeller(db_client)
-    keepa_api_key = os.getenv("KEEPA_API_KEY")
-    keepa_client = KeepaClient(keepa_api_key)
-    searcher = SellerSearcher(repository, keepa_client)
+    db_client = db.database_client(**db_config)
 
-    products = repository.get_all_products()
-    for product in products:
-        searcher.search_seller(product)
+    repository = RepositoryToGetSeller(db_client)
+
+    keepa_api_key = os.getenv("KEEPA_API_KEY")
+    keepa_client = keepa.keepa(keepa_api_key)
+    searcher = keepa.seller_searcher(db_client, keepa_client)
+
+    searcher.process_search_seller()
 
     db_client.close()
 

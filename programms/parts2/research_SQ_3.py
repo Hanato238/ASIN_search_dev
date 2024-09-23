@@ -34,7 +34,7 @@ def main():
 
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = keepa.keepa_client(api_key)
-    sales_rank_updater = keepa.sales_rank_updater(keepa.repository_to_get_sales(db_client), keepa_client)
+    sales_rank_updater = keepa.sales_rank_updater(db_client, keepa_client)
 
     sp_credentials = { 
         'refresh_token': os.getenv('REFRESH_TOKEN'),
@@ -69,7 +69,8 @@ def main():
 
         # fill product_detail {'ec_search'}
         # fill product_ec {'id', 'asin_id', 'ec_url'}
-        if record_product_detail['three_month_sales'] == 0 or record_product_detail['three_month_sales'] > 200:
+        monthly_sales_per_cart = record_product_detail['three_month_sales'] / record_product_detail['competitors']
+        if record_product_detail['three_month_sales'] == 0 or record_product_detail['three_month_sales'] > 200 or monthly_sales_per_cart > 1:
             searcher.update.update_product_status(record_product_detail['id'])
         else:
             searcher.process_image_url(record)
@@ -79,7 +80,7 @@ def main():
         for record in records_product_ec:
             scraper.scrape_and_save(record)
 
-        # fill products_detail {'product_price'} {'sales_price'} {'commission'} {'expected_import_fees'}
+        # fill products_detail {'ec_url_id'} {'product_price'} {'sales_price'} {'commission'} {'expected_import_fees'}
         record_product_detail = calc.process_product_price(record_product_detail)
         record_product_detail = calc.process_sales_price(record_product_detail)
         record_product_detail = sp_api.process_commission(record_product_detail)
@@ -89,7 +90,7 @@ def main():
 
     db_client.close()
 
-## not filled : products_detail(ec_url?id, product_price, monthly, decision)
+## not filled : products_master(last_search), products_detail(research_date, final_dicision)
 
 ## All filled : sellers, junction, products_master, products_ec, ec_sites
 
