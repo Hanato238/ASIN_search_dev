@@ -9,6 +9,7 @@ import modules.keepa_client as keepa
 dotenv.load_dotenv()
 
 
+
 def main():
     db_config = {
         'host': os.getenv('DB_HOST'),

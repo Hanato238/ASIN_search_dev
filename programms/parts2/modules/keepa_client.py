@@ -5,7 +5,15 @@ import dotenv
 dotenv.load_dotenv()
 
 class KeepaClient:
-    def __init__(self, api_key):
+    _instance = None
+
+    def __new__(cls, api_key):
+        if cls._instance is None:
+            cls._instance = super(KeepaClient, cls).__new__(cls)
+            cls._instance.api = keepa.Keepa(api_key)
+        return cls._instance
+    
+    def _initialize(self, api_key):
         self.api = keepa.Keepa(api_key)
 
     def search_asin_by_seller(self, seller):
@@ -50,7 +58,8 @@ class KeepaClient:
         products = self.api.query(asin, domain='JP', stats=90)
         return products[0]['stats']['salesRankDrops90']
     
-
+def keepa_client(api_key):
+    return KeepaClient(api_key)
 
 #------------------------------------------------------------
 class RepositoryToGetAsin:
@@ -101,7 +110,7 @@ class AsinSearcher:
             asins = self.keepa_client.search_asin_by_seller(seller)
             if len(asins) == 0:
                 print(f'{seller} has NO Asins')
-                return
+                continue
         
             print(f'{seller} has Asins')
             for asin in asins:

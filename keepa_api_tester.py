@@ -10,3 +10,7 @@ asin = 'B08YHCZNC6'
 
 products = api.query(asin, domain='JP', stats=90)
 print(products[0]['offers'])
+
+seller = 'A28BFN20WKZJRU'
+asins = api.seller_query(seller, domain='JP', storefront=True)
+print(asins[seller]['asinList'])
