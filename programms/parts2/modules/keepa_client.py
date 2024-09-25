@@ -1,30 +1,33 @@
 import keepa
-import os
 import dotenv
+import logging
+from typing import List, Dict, Any, Optional
 
 dotenv.load_dotenv()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class KeepaClient:
     _instance = None
 
-    def __new__(cls, api_key):
+    def __new__(cls, api_key: str) -> 'KeepaClient':
         if cls._instance is None:
             cls._instance = super(KeepaClient, cls).__new__(cls)
             cls._instance.api = keepa.Keepa(api_key)
         return cls._instance
     
-    def _initialize(self, api_key):
+    def _initialize(self, api_key: str) -> None:
         self.api = keepa.Keepa(api_key)
+        self.api._timeout = 20
 
-    def search_asin_by_seller(self, seller):
+    def search_asin_by_seller(self, seller: str) -> List[str]:
         try:
             products = self.api.seller_query(seller, domain='JP', storefront=True)
             return products[seller]['asinList']
         except Exception as e:
-            print(f"Error fetching ASINs for seller {seller}: {e}")
+            logging.error(f"Error fetching ASINs for seller {seller}: {e}")
             return []
         
-    def query_seller_info(self, asin):
+    def query_seller_info(self, asin: str) -> Dict[str, Any]:
         return self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)
     '''
         this returns data
@@ -54,11 +57,11 @@ class KeepaClient:
                 "primeExclCSV": Integer array
             }
     '''
-    def get_sales_rank_drops(self, asin):
+    def get_sales_rank_drops(self, asin: str) -> int:
         products = self.api.query(asin, domain='JP', stats=90)
         return products[0]['stats']['salesRankDrops90']
     
-def keepa_client(api_key):
+def keepa_client(api_key: str) -> KeepaClient:
     return KeepaClient(api_key)
 
 #------------------------------------------------------------
@@ -67,7 +70,7 @@ class RepositoryToGetAsin:
         self.db_client = db_client
 
     def get_sellers(self):
-        return self.db_client.execute_query("SELECT seller FROM sellers")
+        return self.db_client.execute_query("SELECT seller FROM sellers")[0]
 
     def add_product_master(self, asin):
         counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
@@ -99,6 +102,9 @@ class RepositoryToGetAsin:
         """
         self.db_client.execute_update(insert_query, (asin_id,))
 
+def repository_to_get_asin(database_client):
+    return RepositoryToGetAsin(database_client)
+# api.query()がFacadeパターンではRuntime Errorになる
 class AsinSearcher:
     def __init__(self, db_client, keepa_client):
         self.repository = RepositoryToGetAsin(db_client)
@@ -126,40 +132,58 @@ def asin_searcher(db_client, keepa_client):
 
 #------------------------------------------------------------
 class RepositoryToGetSeller:
-    def __init__(self, db_client):
+    def __init__(self, db_client: Any) -> None:
         self.db = db_client
 
-    def get_all_products(self):
+    def get_products_to_process(self) -> List[Dict[str, Any]]:
         query = "SELECT id, asin FROM products_master WHERE is_good IS NULL OR is_good = TRUE"
-        return self.db.execute_query(query)
+        try:
+            return self.db.execute_query(query)
+        except Exception as e:
+            logging.error(f"Error fetching all products: {e}")
+            return []
 
-    def get_seller_count(self, seller):
+    def get_seller_count(self, seller: str) -> int:
         count_query = "SELECT COUNT(*) FROM sellers WHERE seller = %s"
-        return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
-
-    def add_seller(self, seller):
+        try:
+            return self.db.execute_query(count_query, (seller,))[0]['COUNT(*)']
+        except Exception as e:
+            logging.error(f"Error fetching seller count: {e}")
+            return 0
+            
+    def add_seller(self, seller: str) -> None:
         insert_query = "INSERT INTO sellers (seller) VALUES (%s)"
         self.db.execute_update(insert_query, (seller,))
 
-    def get_seller_id(self, seller):
-        seller_id_query = "SELECT id FROM sellers WHERE seller = %s"
-        return self.db.execute_query(seller_id_query, (seller,))[0]['id']
-
-    def add_junction(self, seller_id, product_id):
+    def get_seller_id(self, seller: str) -> int:
+        seller_id_query = "SELECT id FROM  sellers WHERE seller = %s"
+        try:
+            return self.db.execute_query(seller_id_query, (seller,))[0]['id']
+        except Exception as e:
+            logging.error(f"Error fetching seller ID: {e}")
+            return None
+        
+    def add_junction(self, seller_id: int, product_id: int) -> None:
         junction_query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
-        self.db.execute_update(junction_query, (seller_id, product_id))
+        try:
+            self.db.execute_update(junction_query, (seller_id, product_id))
+        except Exception as e:
+            logging.error(f"Error adding junction for seller_id {seller_id} and product_id {product_id}: {e}")
 
-    def create_record_to_products_detail(self, product_id, competitors):
+    def create_record_to_products_detail(self, product_id: int, competitors: int) -> None:
         query = "INSERT INTO products_detail (asin_id, competitors) VALUES (%s, %s)"
-        self.db.execute_update(query, (product_id, competitors))
+        try:
+            self.db.execute_update(query, (product_id, competitors))
+        except Exception as e:
+            logging.error(f"Error creating record for product_id {product_id}: {e}")
 
 class SellerSearcher:
-    def __init__(self, database_client, keepa_client):
+    def __init__(self, database_client: Any, keepa_client: Any) -> None:
         self.repository = RepositoryToGetSeller(database_client)
         self.api = keepa_client
 
-    def process_search_seller(self, product):
-        products = self.repository.get_all_products()
+    def process_search_seller(self) -> None:
+        products = self.repository.get_products_to_process()
         for product in products:
             print(f'asin : {product["asin"]}')
             asin = product['asin']
@@ -171,7 +195,7 @@ class SellerSearcher:
             self.repository.create_record_to_products_detail(product_id, competitors)
 
             if not extracted_data:
-                print(f"ASIN: {asin} のsellerIDが見つかりませんでした")
+                logging.info(f"ASIN: {asin} のsellerIDが見つかりませんでした")
                 return
 
             for datum in extracted_data:
@@ -179,21 +203,21 @@ class SellerSearcher:
                 count = self.repository.get_seller_count(seller)
 
                 if count == 0:
-                    print(f'add sellerId : {seller}')
+                    logging.info(f'add sellerId : {seller}')
                     self.repository.add_seller(seller)
 
                 seller_id = self.repository.get_seller_id(seller)
                 self.repository.add_junction(seller_id, product_id)
-            print(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
+            logging.info(f"ASIN: {asin} のsellerIDを取得しました: {len(extracted_data)}件")
 
-    def extract_info(self, data):
+    def extract_info(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]: 
         result = []
         for item in data:
             if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
                 result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
         return result
     
-    def count_FBA_sellers(self, data):
+    def count_FBA_sellers(self, data: List[Dict[str, Any]]) -> int:
         # Check if any element has isAmazon set to True
         for item in data:
             if item['isAmazon']:
@@ -203,7 +227,8 @@ class SellerSearcher:
         prime_count = sum(1 for item in data if item['isPrime'])
         return prime_count
 
-def seller_searcher(database_client, keepa_client):
+# これはFacadeパターンでも機能する
+def seller_searcher(database_client: Any, keepa_client: Any) -> SellerSearcher:
     return SellerSearcher(database_client, keepa_client)
 
 #------------------------------------------------------------
@@ -211,13 +236,25 @@ class RepositoryToGetSales:
     def __init__(self, db_client):
         self.db_client = db_client
 
-    def get_record_without_sales_rank(self, asin_id):
+    def get_record_to_process(self):
         query = """
-            SELECT * FROM products_detail
-            WHERE asin_id = %s AND three_month_sales IS NULL;
+            SELECT pd.* FROM products_detail pd
+            JOIN products_master pm ON pd.asin_id = pm.id
+            WHERE pd.three_month_sales IS NULL;
         """
-        return self.db_client.execute_query(query, (asin_id,))
-
+        records = self.db_client.execute_query(query)
+        return records
+    
+    def get_asin_from_product_detail(self, product_id):
+        query = """
+            SELECT pm.asin
+            FROM products_detail pd
+            JOIN products_master pm ON pd.asin_id = pm.id
+            WHERE pd.id = %s;
+            """
+        #query = "SELECT asin_id FROM products_detail WHERE id = %s"
+        return self.db_client.execute_query(query, (product_id,))[0]
+    
     def update_sales_rank(self, record):
         id = record['id']
         three_month_sales = record['three_month_sales']
@@ -228,18 +265,49 @@ class RepositoryToGetSales:
         """
         self.db_client.execute_update(insert_query, (three_month_sales, id))
 
-class SalesRankUpdater:
+class DetailUpdater:
     def __init__(self, db_client, keepa_client):
         self.repository = RepositoryToGetSales(db_client)
         self.keepa_client = keepa_client
 
-    def process_sales_rankd_drops(self, record):
-        asin_id = record['id']
-        record = self.repository.get_record_without_sales_rank(asin_id)
-        record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(record['asin'])
-        self.repository.update_sales_rank(record)
-        return record
+    def get_record_to_process(self):
+        records = self.repository.get_record_to_process()
+        return records
 
-def sales_rank_updater(database_client, keepa_client):
-    return SalesRankUpdater(database_client, keepa_client)
+    def process_sales_rank_drops(self, record):
+        try:
+            asin = self.repository.get_asin_from_product_detail(record['id'])
+            record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(asin['asin'])
+            self.repository.update_sales_rank(record)
+            return record
+        except Exception as e:
+            print(f"Error processing sales rank drops for record {record['asin']}: {e}")
+            return None
+
+    def process_get_competitors(self, record):
+        try:
+            asin = self.repository.get_asin_from_product_detail(record['id'])
+            seller_info = self.keepa_client.api.query_seller_info(asin)
+            extracted_data = self.extract_info(seller_info[0]['offers'])
+            competitors = self.count_FBA_sellers(extracted_data)
+            record[0]['competitors'] = competitors
+        except Exception as e:
+            print(f"Error processing competitors for record {record['id']}: {e}")
+
+    def count_FBA_sellers(self, data):
+        try:
+            # Check if any element has isAmazon set to True
+            for item in data:
+                if item['isAmazon']:
+                    return 1000
+
+            # Count elements where isPrime is True
+            prime_count = sum(1 for item in data if item['isPrime'])
+            return prime_count
+        except Exception as e:
+            print(f"Error counting FBA sellers: {e}")
+            return 0
+
+def detail_updater(database_client, keepa_client):
+    return DetailUpdater(database_client, keepa_client)
 
