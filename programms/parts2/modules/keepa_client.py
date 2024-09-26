@@ -22,6 +22,9 @@ class KeepaClient:
     def search_asin_by_seller(self, seller: str) -> List[str]:
         try:
             products = self.api.seller_query(seller, domain='JP', storefront=True)
+            if seller not in products:
+                logging.info(f"ASINs not found for seller {seller}")
+                return []
             return products[seller]['asinList']
         except Exception as e:
             logging.error(f"Error fetching ASINs for seller {seller}: {e}")
@@ -66,13 +69,17 @@ def keepa_client(api_key: str) -> KeepaClient:
 
 #------------------------------------------------------------
 class RepositoryToGetAsin:
-    def __init__(self, db_client):
+    def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
-    def get_sellers(self):
-        return self.db_client.execute_query("SELECT seller FROM sellers")[0]
+    def get_sellers(self) -> List[Dict[str, Any]]:
+        logging.info("Fetching sellers")
+        sellers = self.db_client.execute_query("SELECT seller FROM sellers")
+        logging.info(f"Fetched {len(sellers)} sellers")
+        return sellers
 
-    def add_product_master(self, asin):
+    def add_product_master(self, asin: str) -> None:
+        logging.info("Adding product master")
         counts = self.db_client.execute_query("SELECT COUNT(*) FROM products_master WHERE asin = %s", (asin,))
         if counts[0]['COUNT(*)'] == 0:
             insert_query = """
@@ -80,13 +87,31 @@ class RepositoryToGetAsin:
                 VALUES (%s, '2020-01-01')
             """
             self.db_client.execute_update(insert_query, (asin,))
-            print(f"Added product master for ASIN: {asin}")
+            logging.info(f"Added product master for ASIN: {asin}")
+        else:
+            logging.info(f"Product master for ASIN: {asin} already exists")
 
-    def get_product_id(self, asin):
+    def get_product_id(self, asin: str) -> Optional[int]:
+        logging.info(f"Fetching product ID for ASIN: {asin}")
         result = self.db_client.execute_query("SELECT id FROM products_master WHERE asin = %s", (asin,))
-        return result[0]['id'] if result else None
+        product_id = result[0]['id'] if result else None
+        logging.info(f"Fetched product ID: {product_id} of ASIN: {asin}")
+        return product_id
+    
+    def get_junction(self, seller: str, product_id: int) -> Optional[Dict[str, Any]]:   
+        logging.info(f"Fetching junction for seller: {seller} and product ID: {product_id}")
+        query = """
+            SELECT COUNT(*) FROM junction
+            WHERE seller_id = (SELECT id FROM sellers WHERE seller = %s)
+            AND product_id = %s
+        """
+        result = self.db_client.execute_query(query, (seller, product_id))
+        junction = result[0]['COUNT(*)'] if result else None
+        logging.info(f"Fetched junction for seller: {seller} and product ID: {product_id}")
+        return junction
 
-    def write_asin_to_junction(self, seller, product_id):
+    def write_asin_to_junction(self, seller: str, product_id: int) -> None:
+        logging.info(f"Writing ASIN to junction for seller: {seller} and product ID: {product_id}")
         query = "SELECT id FROM sellers WHERE seller = %s"
         seller_id = self.db_client.execute_query(query, (seller,))[0]['id']
         insert_query = """
@@ -94,39 +119,49 @@ class RepositoryToGetAsin:
             VALUES (%s, %s)
         """
         self.db_client.execute_update(insert_query, (seller_id, product_id))
+        logging.info(f"Written ASIN to junction for seller: {seller} and product ID: {product_id}")
 
-    def add_product_detail(self, asin_id):
+    def add_product_detail(self, asin_id: int) -> None:
+        logging.info("Adding product detail for ASIN ID: {asin_id}")
         insert_query = """
             INSERT INTO products_detail (asin_id)
             VALUE (%s)
         """
         self.db_client.execute_update(insert_query, (asin_id,))
+        logging.info(f"Added product detail for ASIN ID: {asin_id}")
 
-def repository_to_get_asin(database_client):
+def repository_to_get_asin(database_client: Any) -> RepositoryToGetAsin:
     return RepositoryToGetAsin(database_client)
-# api.query()がFacadeパターンではRuntime Errorになる
+
 class AsinSearcher:
-    def __init__(self, db_client, keepa_client):
+    def __init__(self, db_client: Any, keepa_client: Any) -> None:
         self.repository = RepositoryToGetAsin(db_client)
         self.keepa_client = keepa_client
 
-    def process_seller(self):
+    def process_seller(self) -> None:
+        logging.info("Starting seller processing")
         sellers = self.repository.get_sellers()
         for seller in sellers:
+            seller = seller['seller']
+            logging.info(f"Processing seller: {seller}")
             asins = self.keepa_client.search_asin_by_seller(seller)
             if len(asins) == 0:
-                print(f'{seller} has NO Asins')
+                logging.info(f'{seller} has NO Asins')
                 continue
         
-            print(f'{seller} has Asins')
+            logging.info(f'{seller} has Asins')
             for asin in asins:
                 self.repository.add_product_master(asin)
                 asin_id = self.repository.get_product_id(asin)
                 if asin_id:
                     self.repository.add_product_detail(asin_id)
-                    self.repository.write_asin_to_junction(seller, asin_id)
+                    if self.repository.get_junction(seller, asin_id):
+                        logging.info(f"ASIN: {asin} already exists in junction for seller: {seller}")
+                    else:
+                        self.repository.write_asin_to_junction(seller, asin_id)
+        logging.info("Seller processing complete")
 
-def asin_searcher(db_client, keepa_client):
+def asin_searcher(db_client: Any, keepa_client: Any) -> AsinSearcher:
     return AsinSearcher(db_client, keepa_client)
 
 

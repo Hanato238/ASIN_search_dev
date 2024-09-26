@@ -25,7 +25,7 @@ class DatabaseClient:
             self.initialized = True
 
     def execute_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        logging.info(f"executing query: {query} with params: {params}")
+        logging.info(f"executing query")
         self.cursor.execute(query, params or ())
         result = self.cursor.fetchall()
         logging.info(f"Query executed successfully")
