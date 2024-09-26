@@ -3,8 +3,12 @@ import dotenv
 import os
 import requests
 from time import sleep
+import logging
+from typing import Dict, List, Union, Any, str
 
 dotenv.load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 dataset_dict = {
     'walmart': 'gd_l95fol7l1ru6rlo116',
@@ -13,11 +17,11 @@ dataset_dict = {
 }
 
 class BrightDataAPI:
-    def __init__(self, dataset_id):
+    def __init__(self, dataset_id) -> None:
         self.dataset_id = dataset_id
         self.api_key = os.getenv('BRIGHTDATA_API_KEY')
 
-    def get_snapshot_id(self, url, dataset_name):
+    def get_snapshot_id(self, url: str, dataset_name: str) -> str:
         dataset_id = self.dataset_id
         if not dataset_id:
             raise ValueError(f"Dataset name '{dataset_name}' not found in dataset dictionary.")
@@ -33,10 +37,10 @@ class BrightDataAPI:
         response = requests.post(api_url, headers=headers, json=data)
         response.raise_for_status()
         snapshot_id = response.json()['snapshot_id']
-        print(snapshot_id)
+        logging.info(f"Snapshot ID: {snapshot_id}")
         return snapshot_id
 
-    def get_detail(self, snapshot_id, max_retries=5):
+    def get_detail(self, snapshot_id: str, max_retries: int=5) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}?format=json"
         headers = {
             "Authorization": f"Bearer {self.api_key}"
@@ -54,13 +58,14 @@ class BrightDataAPI:
                     return data
             except (requests.exceptions.RequestException, ValueError) as e:
                 retries += 1
+                logging.warning(f"Failed to get data from BrightData API. Retrying... ({retries}/{max_retries})")
                 if retries >= max_retries:
                     raise e
-                sleep(10 * retries)  # Exponential backoff
+                sleep(10 * retries)
 
 class ScraperFactory:
     @staticmethod
-    def create_scraper(scraper_type, dataset_id):
+    def create_scraper(scraper_type: str, dataset_id: str) -> BrightDataAPI:
         if scraper_type == 'amazon':
             return AmazonScraper(dataset_id)
         elif scraper_type == 'walmart':
@@ -71,10 +76,10 @@ class ScraperFactory:
             raise ValueError(f"Scraper type '{scraper_type}' is not supported.")
 
 class AmazonScraper(BrightDataAPI):
-    def __init__(self, dataset_id):
+    def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
 
-    def get_data(self, data):
+    def get_data(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = data[0]['final_price']
         data_scraped['currency'] = data[0]['currency']
@@ -82,10 +87,10 @@ class AmazonScraper(BrightDataAPI):
         return data_scraped
 
 class WalmartScraper(BrightDataAPI):
-    def __init__(self, dataset_id):
+    def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
 
-    def get_data(self, data):
+    def get_data(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = data[0]['final_price']
         data_scraped['currency'] = data[0]['currency']
@@ -93,10 +98,10 @@ class WalmartScraper(BrightDataAPI):
         return data_scraped
 
 class EBayScraper(BrightDataAPI):
-    def __init__(self, dataset_id):
+    def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
     
-    def get_data(self, data):
+    def get_data(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = data[0]['price']
         data_scraped['currency'] = data[0]['currency']
@@ -104,15 +109,15 @@ class EBayScraper(BrightDataAPI):
         return data_scraped
 
 class Repository:
-    def __init__(self, database_client):
+    def __init__(self, database_client: Any) -> None:
         self.database_client = database_client
     
-    def get_ec_urls(self, record):
+    def get_ec_urls(self, record: Dict[str, Any]) -> List[Dict[str, Any]]:
         asin_id = record['id']
         query = f"SELECT * FROM products_ec WHERE asin_id = {asin_id}"
         return self.database_client.execute_query(query)
     
-    def update_ec_url(self, asin_id, data):
+    def update_ec_url(self, asin_id: int, data: Dict[str, Any]) -> None:
         price = data['price']
         price_unit = data['currency']
         availability = data['availability']
@@ -120,11 +125,11 @@ class Repository:
         self.database_client.execute_query(query)
 
 class ScraperFacade:
-    def __init__(self, database_client):
+    def __init__(self, database_client: Any) -> None:
         self.repository = Repository(database_client)
 
-    def scrape_and_save(self, record):
-        asin_id = record['id']
+    def scrape_and_save(self, record: Dict[str, Any]) -> None:
+        asin_id = record['asin_id']
         url = record['ec_url']
         if 'amazon' in url:
             dataset_id = 'gd_l7q7dkf244hwjntr0'
@@ -145,5 +150,5 @@ class ScraperFacade:
         self.repository.update_ec_url(asin_id, data_scraped)
 
 
-def get_scraper():
-    return ScraperFacade()
+def get_scraper(database_client: Any) -> ScraperFacade:
+    return ScraperFacade(database_client)
