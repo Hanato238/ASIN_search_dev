@@ -20,6 +20,7 @@ class ImageSearcher:
             logging.info("No image URL found")
             return None
         image = vision.Image()
+
         image.source.image_uri = image_url
 
         response = self.client.web_detection(image=image)
@@ -47,7 +48,7 @@ class RepositoryToGet:
         return result
     
     def get_products_to_process(self) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM products_master WHERE ec_search IS NULL AND image_url IS NOT NULL"
+        query = "SELECT * FROM products_master WHERE ec_search IS NULL OR ec_search = FALSE" 
         result = self.db_client.execute_query(query)
         logging.info(f"Found {len(result)} products to process")
         return result
@@ -58,11 +59,6 @@ class RepositoryToGet:
         image_url = result[0]['image_url'] if result else None
         logging.info(f"Image URL for asin_id {asin_id}: {image_url}")
         return image_url
-    
-    # 統合の際にget_products_to_processと置換
-    def get_product_to_process(self, record):
-        query = "SELECT * FROM products_master WHERE asin = %s"
-        return self.db_client.execute_query(query, (record['asin'], ))
     
 
 class RepositoryToUpdate:
@@ -80,10 +76,15 @@ class RepositoryToUpdate:
         else:
             logging.info("URL already exists in the database")
 
+    def update_salvage_ec(self, record: Dict[str, Any]) -> None:
+        query = "INSERT salvage_ec (asin_id, ec_url_not_supported) VALUES (%s, %s)"
+        self.db_client.execute_update(query, (record['asin_id'], record['ec_url']))
+
     def update_product_status(self, record: Dict[str, Any]) -> None:
         update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
+        #update_query = "UPDATE products_master SET ec_search = TRUE WHERE id = %s"
         self.db_client.execute_update(update_query, (record['id'],))
-        logging.info(f"Updated product status for asin_id {record['asin_id']}")
+        logging.info(f"Updated product status for asin_id {record['id']}")
     
 
 class ImageSearchService:
@@ -91,7 +92,11 @@ class ImageSearchService:
         self.searcher = ImageSearcher()
         self.get = RepositoryToGet(database_client)
         self.update = RepositoryToUpdate(database_client)
+
+    def get_products_to_process(self) -> List[Dict[str, Any]]:
+        return self.get.get_products_to_process()
     
+    #　正規表現がよくわからん。使用しない。
     def check_urls(self, url: str) -> bool:
         patterns = {
             "Amazon": r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?",
@@ -103,19 +108,33 @@ class ImageSearchService:
                 logging.info(f"Found matching URL: {name}: {url}")
                 return True
             return False
+
             
     def process_image_url(self, record: Dict[str, Any]) -> None:
+        self.update.update_product_status(record)
         positive_list = self.get.get_positive_list()
-        image_url = self.get.get_image_url_from_asin_id(record['asin_id'])
+        image_url = self.get.get_image_url_from_asin_id(record['id'])
         ec_urls = self.searcher.search_image(image_url, positive_list)
-        record_product_ec = {'id': '', 'asin_id': record['asin_id'], 'price':'', 'price_unit':'', 'availability':'', 'ec_url':''}
+        if ec_urls is None:
+            logging.info("No matching URL found")
+            return
+        record_product_ec = {'id': '', 'asin_id': record['id'], 'price':'', 'price_unit':'', 'availability':'', 'ec_url':'', 'is_filled': ''}
         for ec_url in ec_urls:
-            if self.check_urls(ec_url):
-                record_product_ec['ec_url'] = ec_url
-                self.update.update_ec_url(record_product_ec)
-            else:
-                logging.info("No matching URL found")
-            self.update.update_product_status(record) 
+            record_product_ec['ec_url'] = ec_url
+            self.update.update_ec_url(record_product_ec)
+
+"""
+# 正規表現が厳密にわかれば使用
+            try:
+                if self.check_urls(ec_url):
+                    self.update.update_ec_url(record_product_ec)
+                else:
+                    self.update.update_salvage_ec(record_product_ec)
+                    logging.info("URL not supported")
+            except Exception as e:
+                logging.info("An error occurred: {e}")
+                continue
+"""
 
 def image_searcher(database_client: Any) -> ImageSearchService:
     return ImageSearchService(database_client)

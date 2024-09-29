@@ -37,6 +37,7 @@ erDiagram
         bool ec_search "image_urlでサーチ済みか"
         timestamp last_search "最終検索日時: not null"
         bool is_good "継続的な検索対象にするか"
+        bool is_filled "SP-APIでサーチ済みか"
     }
 
     junction {
@@ -52,6 +53,9 @@ erDiagram
         string price_unit
         bool availability "仕入れ可能か"
         string ec_url "仕入れ先候補URL"
+        bool is_filled "scrape済か",
+        bool is_supported "scrapeできるサイトか"
+
     }
 
     ec_sites {
@@ -74,6 +78,7 @@ erDiagram
         float expexted_roi "予想利益率"
         bool decision "仕入判定"
         bool final_dicision "最終判定"
+        bool is_researched "Keepa-APIで検索済みか"
     }
 
     purchase {

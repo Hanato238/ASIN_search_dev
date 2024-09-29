@@ -16,8 +16,7 @@ class KeepaClient:
         return cls._instance
     
     def _initialize(self, api_key: str) -> None:
-        self.api = keepa.Keepa(api_key)
-        self.api._timeout = 20
+        self.api = keepa.Keepa(api_key, timeout=30)
 
     def search_asin_by_seller(self, seller: str) -> List[str]:
         try:
@@ -268,19 +267,20 @@ def seller_searcher(database_client: Any, keepa_client: Any) -> SellerSearcher:
 
 #------------------------------------------------------------
 class RepositoryToGetSales:
-    def __init__(self, db_client):
+    def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
-    def get_record_to_process(self):
+    def get_record_to_process(self) -> List[Dict[str, Any]]:
+        logging.info("Fetching records to process")
         query = """
-            SELECT pd.* FROM products_detail pd
-            JOIN products_master pm ON pd.asin_id = pm.id
-            WHERE pd.three_month_sales IS NULL;
+            SELECT * FROM products_detail WHERE is_researched IS NULL;
         """
         records = self.db_client.execute_query(query)
+        logging.info(f"Fetched {len(records)} records to process")
         return records
     
-    def get_asin_from_product_detail(self, product_id):
+    def get_asin_from_product_detail(self, product_id: int) -> Dict[str, Any]:
+        logging.info(f"Fetching ASIN from product detail for product ID: {product_id}")
         query = """
             SELECT pm.asin
             FROM products_detail pd
@@ -290,7 +290,8 @@ class RepositoryToGetSales:
         #query = "SELECT asin_id FROM products_detail WHERE id = %s"
         return self.db_client.execute_query(query, (product_id,))[0]
     
-    def update_sales_rank(self, record):
+    def update_sales_rank(self, record: Dict[str, Any]) -> None:
+        logging.info(f"Updating sales rank for record {record['id']}")
         id = record['id']
         three_month_sales = record['three_month_sales']
         insert_query = """
@@ -299,17 +300,46 @@ class RepositoryToGetSales:
             WHERE id = %s;
         """
         self.db_client.execute_update(insert_query, (three_month_sales, id))
+        logging.info(f"Updated sales rank for record {record['id']}")
 
+    def update_competitors(self, record: Dict[str, Any]) -> None:
+        logging.info(f"Updating competitors for record_id: {record['id']}")
+        id = record['id']
+        competitors = record['competitors']
+        insert_query = """
+            UPDATE products_detail
+            SET competitors = %s
+            WHERE id = %s;
+        """
+        self.db_client.execute_update(insert_query, (competitors, id))
+        logging.info(f"Updated competitors for record {record['id']}")
+
+    def update_detail_status(self, record: Dict[str, Any]) -> None:
+        logging.info(f"Updating detail status for record {record['id']}")
+        id = record['id']
+        insert_query = """
+            UPDATE products_detail
+            SET is_researched = TRUE
+            WHERE id = %s;
+        """
+        self.db_client.execute_update(insert_query, (id,))
+        logging.info(f"Updated detail status for record {record['id']}")
 class DetailUpdater:
-    def __init__(self, db_client, keepa_client):
+    def __init__(self, db_client: Any, keepa_client: Any) -> None:
         self.repository = RepositoryToGetSales(db_client)
         self.keepa_client = keepa_client
 
-    def get_record_to_process(self):
+    def get_record_to_process(self) -> List[Dict[str, Any]]:
         records = self.repository.get_record_to_process()
         return records
+    
+    def update_detail_status(self, record: Dict[str, Any]) -> None:
+        try:
+            self.repository.update_detail_status(record)
+        except Exception as e:
+            logging.error(f"Error updating detail status for record {record['id']}: {e}")
 
-    def process_sales_rank_drops(self, record):
+    def process_sales_rank_drops(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
             asin = self.repository.get_asin_from_product_detail(record['id'])
             record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(asin['asin'])
@@ -319,18 +349,31 @@ class DetailUpdater:
             print(f"Error processing sales rank drops for record {record['asin']}: {e}")
             return None
 
-    def process_get_competitors(self, record):
+    def process_get_competitors(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
             asin = self.repository.get_asin_from_product_detail(record['id'])
-            seller_info = self.keepa_client.api.query_seller_info(asin)
+            seller_info = self.keepa_client.query_seller_info(asin['asin'])
             extracted_data = self.extract_info(seller_info[0]['offers'])
             competitors = self.count_FBA_sellers(extracted_data)
-            record[0]['competitors'] = competitors
+            record['competitors'] = competitors
+            self.repository.update_competitors(record)
+            return record
         except Exception as e:
-            print(f"Error processing competitors for record {record['id']}: {e}")
+            logging.error(f"Error processing competitors for record {record['id']}: {e}")
+            return None
 
-    def count_FBA_sellers(self, data):
+    def extract_info(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]: 
+        result = []
+        for item in data:
+            if item["isFBA"] and item["condition"] == 1 and item["isShippable"] and item["isPrime"] and item["isScam"] == 0 and item["condition"] == 1:
+                result.append({"sellerId": item["sellerId"], "isAmazon": item["isAmazon"], "isShippable": item["isShippable"], "isPrime": item["isPrime"]})
+        return result
+    
+    def count_FBA_sellers(self, data: List[Dict[str, Any]]) -> int:
         try:
+            if not data:
+                logging.info("No data found")
+                return 0
             # Check if any element has isAmazon set to True
             for item in data:
                 if item['isAmazon']:
@@ -343,6 +386,6 @@ class DetailUpdater:
             print(f"Error counting FBA sellers: {e}")
             return 0
 
-def detail_updater(database_client, keepa_client):
+def detail_updater(database_client: Any, keepa_client: Any) -> DetailUpdater:
     return DetailUpdater(database_client, keepa_client)
 

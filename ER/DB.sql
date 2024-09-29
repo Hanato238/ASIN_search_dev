@@ -12,7 +12,8 @@ CREATE TABLE products_master (
     image_url VARCHAR(255),
     last_search TIMESTAMP NOT NULL,
     ec_search BOOLEAN,
-    is_good BOOLEAN
+    is_good BOOLEAN,
+    is_filled BOOLEAN
 );
 
 CREATE TABLE junction (
@@ -30,6 +31,8 @@ CREATE TABLE products_ec (
     price_unit VARCHAR(3),
     availability BOOLEAN,
     ec_url VARCHAR(255),
+    is_filled BOOLEAN,
+    is_supported BOOLEAN,
     FOREIGN KEY (asin_id) REFERENCES products_master(id)
 );
 
@@ -39,6 +42,7 @@ CREATE TABLE ec_sites (
     cry VARCHAR(4),
     to_research BOOLEAN
 );
+
 
 CREATE TABLE products_detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -54,6 +58,8 @@ CREATE TABLE products_detail (
     expected_roi FLOAT,
     decision BOOLEAN,
     final_decision BOOLEAN,
+    is_ec_searched BOOLEAN,
+    is_researched BOOLEAN,
     FOREIGN KEY (asin_id) REFERENCES products_master(id),
     FOREIGN KEY (ec_url_id) REFERENCES products_ec(id)
 );
