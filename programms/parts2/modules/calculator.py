@@ -2,7 +2,8 @@ import os
 import dotenv
 import yfinance as yf
 import logging
-from typing import Any, Dict, List, Tuple, Optional, str, int, bool
+from typing import Any, Dict, List, Tuple, Optional
+
 
 dotenv.load_dotenv()
 
@@ -215,7 +216,7 @@ class Calculator:
     
     def process_product_decision(self, record: Dict[str, Any]) -> Dict[str, Any]:
         logging.info(f"Processing product decision for product id: {record['id']}")
-        if record['expected_roi'] > 0.3:
+        if record['expected_roi'] > 0.3 and record['three_month_sales']/record['competitors'] > 3 and record['three_month_sales'] < 100:
             decision = 1
         else:
             decision = 0

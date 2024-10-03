@@ -78,13 +78,16 @@ class ScraperFactory:
             return EBayScraper(dataset_id)
         else:
             raise ValueError(f"Scraper type '{scraper_type}' is not supported.")
-
+w
 class AmazonScraper(BrightDataAPI):
     def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
+        self.pattern = re.compile(r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?")
 
     def scrape_data(self, scraper: Any, url: str) -> Dict[str, Any]:
-        snapshot_id = scraper.get_snapshot_id(url, ec_site = 'amazon')
+        if self.pattern.match(url) is None:
+            raise ValueError("URL dose not match the pattern")
+        snapshot_id = scraper.get_snapshot_id(url, 'amazon')
         data = scraper.get_detail(snapshot_id)
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = data[0]['final_price']
@@ -95,9 +98,12 @@ class AmazonScraper(BrightDataAPI):
 class WalmartScraper(BrightDataAPI):
     def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
+        self.pattern = re.compile(r"https:\\\\/\\\\/www\\\\.walmart\\\\.(com|ca)\\\\/ip\\\\/[A-Za-z0-9-]+\\\\/[A-Za-z0-9]+")
 
     def scrape_data(self, scraper: Any, url: str) -> Dict[str, Any]:
-        snapshot_id = scraper.get_snapshot_id(url, ec_site = 'walmart')
+        if not self.pattern.match(url):
+            raise ValueError("URL dose not match the pattern")
+        snapshot_id = scraper.get_snapshot_id(url, 'walmart')
         data = scraper.get_detail(snapshot_id)
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = data[0]['final_price']
@@ -108,9 +114,12 @@ class WalmartScraper(BrightDataAPI):
 class EBayScraper(BrightDataAPI):
     def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
+        self.pattern = re.compile(r"https:\/\/www\.ebay\.com\/itm\/.*")
 
     def scrape_data(self, scraper: Any, url: str) -> Dict[str, Any]:
-        snapshot_id = scraper.get_snapshot_id(url, ec_site = 'ebay')
+        if not self.pattern.match(url):
+            raise ValueError("URL dose not match the pattern")
+        snapshot_id = scraper.get_snapshot_id(url, 'ebay')
         data = scraper.get_detail(snapshot_id)
         data_scraped = {'price':'', 'currency':'', 'condition':'', 'availability':''}
         data_scraped['price'] = re.findall(r'[\d.]+', data[0]['price'])[0]
@@ -140,7 +149,7 @@ class RepositoryToUpdate:
     # record_products_ec + scraped_date -> None : update record_products_ec
     def update_ec_url(self, record: Dict[str, Any]) -> None:
         price = record['price']
-        price_unit = record['currency']
+        price_unit = record['price_unit']
         availability = record['availability']
         query = """
             UPDATE products_ec 
@@ -151,6 +160,7 @@ class RepositoryToUpdate:
         """
         #query = f"INSERT INTO products_ec (asin_id, price, price_unit, availability, ec_url) VALUES ({asin_id}, {price}, '{price_unit}', {availability}, '{data['ec_url']}')"
         self.database_client.execute_update(query, (price, price_unit, availability, record['id']))
+        logging.info(f"Update ASIN_id: {record['asin_id']} with Scraped data: {price, price_unit, availability}")  
 
     # record_products_ec -> None: make is_filled = True
     def update_products_ec_status(self, record: Dict[str, Any]) -> None:
@@ -180,6 +190,7 @@ class ScraperFacade:
         try:
             ec_site, dataset_id = self.get_ec_site_and_dataset_id(url)
             scraper = self.create_scraper(ec_site, dataset_id)
+            logging.info(f'Scraping data from {url} by {ec_site} scraper')
             data_scraped = scraper.scrape_data(scraper, url)
 
             self.update_record_with_scraped_data(record, data_scraped)
@@ -187,11 +198,11 @@ class ScraperFacade:
         except ValueError as ve:
             logging.info(f"Error: {ve}")
             self.update.update_supportive(record, False)
-            self.update.update_is_filled(record, False)
+            self.update.update_is_filled(record, True)
         except Exception as e:
             logging.info(f"Error processing image url: {e}")
             self.update.update_supportive(record, False)
-            self.update.update_is_filled(record, False)
+            self.update.update_is_filled(record, True)
 
     def get_ec_site_and_dataset_id(self, url: str) -> Tuple[str, str]:
         if 'amazon' in url:
@@ -222,9 +233,8 @@ class ScraperFacade:
             self.update.update_is_filled(record, False)
             raise ValueError("Scraped data is incomplete.")
         else:
-            self.update.update_ec_url
+            self.update.update_ec_url(record)
             self.update.update_is_filled(record, True)
-            logging.info(f"Scraped data: {data_scraped}")  
 
 
         
@@ -246,7 +256,7 @@ class ScraperFacade:
         
             scraper_factory = ScraperFactory()
             scraper = scraper_factory.create_scraper(ec_site, dataset_id)
-            snapshot_id = scraper.get_snapshot_id(url, ec_site)
+            snapshot_id = scraper.get_snapshot_id(url)
             data = scraper.get_detail(snapshot_id)
             # ec_urlにfillしたい
             data_scraped = scraper.get_data(data)

@@ -1,6 +1,5 @@
 import os
 import dotenv
-import time
 
 # for KeepaClient
 import modules.keepa_client as keepa
@@ -34,7 +33,7 @@ def main():
 
     api_key = os.getenv('KEEPA_API_KEY')
     keepa_client = keepa.keepa_client(api_key)
-    sales_rank_updater = keepa.sales_rank_updater(db_client, keepa_client)
+    detail_updater = keepa.detail_updater(db_client, keepa_client)
 
     sp_credentials = { 
         'refresh_token': os.getenv('REFRESH_TOKEN'),
@@ -46,7 +45,7 @@ def main():
 
     searcher = vision.image_searcher(db_client)
 
-    scraper = ec_scraper.get_scraper()
+    scraper = ec_scraper.get_scraper(db_client)
 
     calc = calculator.calculator(db_client)
 
@@ -62,10 +61,15 @@ def main():
     for record_product_master in records_products_master:
         # fill product_master {'weight', 'weight_unit', 'image_url'}
         record_product_master = sp_api.process_product_detail(record_product_master)
-        # fill product_detail {'three_month_sales'}
 
         #record_product_detail = {'id':'', 'asin_id':'', 'ec_url_id':'', 'product_price':'', 'research_date':'', 'three_month_sales':'', 'competitors':'', 'sales_price':'', 'commission':'', 'expected_import_fees':'', 'expected_roi':'', 'decision':'', 'final_dicision':''}
-        record_product_detail = sales_rank_updater.process_sales_rankd_drops(record)
+        record_product_detail = detail_updater.get_record_to_process(record_product_master)
+        if len(record_product_detail) == 0:
+            continue
+        detail_updater.process_sales_rank_drops(record_product_detail[0])
+        # fill product_detail {'competitors'}
+        if record_product_detail['competitors'] == None:
+            detail_updater.process_get_competitors(record_product_master)
 
         # fill product_detail {'ec_search'}
         # fill product_ec {'id', 'asin_id', 'ec_url'}

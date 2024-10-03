@@ -6,9 +6,11 @@ import modules.database_client as db
 # for keepa client
 import modules.keepa_client as keepa
 
+import logging
+
 dotenv.load_dotenv()
 
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 def main():
     db_config = {
@@ -26,7 +28,7 @@ def main():
     try:
         manager.process_seller()
     except Exception as e:
-        print(f"Error: {e}")
+        logging.info(f"Error processing seller: {e}")
 
     finally:
         db_client.close()

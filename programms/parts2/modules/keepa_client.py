@@ -1,5 +1,8 @@
 import keepa
 import dotenv
+
+from modules.Repository.repository.py import repsoitory_for_sellers, repository_for_junction, repository_for_products_master, repository_for_products_detail
+
 import logging
 from typing import List, Dict, Any, Optional
 
@@ -266,10 +269,11 @@ def seller_searcher(database_client: Any, keepa_client: Any) -> SellerSearcher:
     return SellerSearcher(database_client, keepa_client)
 
 #------------------------------------------------------------
-class RepositoryToGetSales:
+class RepositoryToGetSalesToGet:
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
+    # products_ecとproducts_masterがいずれもfilledなasinが必要・・・
     def get_record_to_process(self) -> List[Dict[str, Any]]:
         logging.info("Fetching records to process")
         query = """
@@ -290,6 +294,10 @@ class RepositoryToGetSales:
         #query = "SELECT asin_id FROM products_detail WHERE id = %s"
         return self.db_client.execute_query(query, (product_id,))[0]
     
+class RepositoryToGetSalesToUpdate:
+    def __init__(self, db_client: Any) -> None:
+        self.db_client = db_client
+
     def update_sales_rank(self, record: Dict[str, Any]) -> None:
         logging.info(f"Updating sales rank for record {record['id']}")
         id = record['id']
@@ -324,26 +332,28 @@ class RepositoryToGetSales:
         """
         self.db_client.execute_update(insert_query, (id,))
         logging.info(f"Updated detail status for record {record['id']}")
+
 class DetailUpdater:
     def __init__(self, db_client: Any, keepa_client: Any) -> None:
-        self.repository = RepositoryToGetSales(db_client)
+        self.get = RepositoryToGetSalesToGet(db_client)
+        self.update = RepositoryToGetSalesToUpdate(db_client)
         self.keepa_client = keepa_client
 
     def get_record_to_process(self) -> List[Dict[str, Any]]:
-        records = self.repository.get_record_to_process()
+        records = self.get.get_record_to_process()
         return records
     
     def update_detail_status(self, record: Dict[str, Any]) -> None:
         try:
-            self.repository.update_detail_status(record)
+            self.update.update_detail_status(record)
         except Exception as e:
             logging.error(f"Error updating detail status for record {record['id']}: {e}")
 
     def process_sales_rank_drops(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
-            asin = self.repository.get_asin_from_product_detail(record['id'])
+            asin = self.get.get_asin_from_product_detail(record['id'])
             record['three_month_sales'] = self.keepa_client.get_sales_rank_drops(asin['asin'])
-            self.repository.update_sales_rank(record)
+            self.update.update_sales_rank(record)
             return record
         except Exception as e:
             print(f"Error processing sales rank drops for record {record['asin']}: {e}")
@@ -351,12 +361,12 @@ class DetailUpdater:
 
     def process_get_competitors(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
-            asin = self.repository.get_asin_from_product_detail(record['id'])
+            asin = self.get.get_asin_from_product_detail(record['id'])
             seller_info = self.keepa_client.query_seller_info(asin['asin'])
             extracted_data = self.extract_info(seller_info[0]['offers'])
             competitors = self.count_FBA_sellers(extracted_data)
             record['competitors'] = competitors
-            self.repository.update_competitors(record)
+            self.update.update_competitors(record)
             return record
         except Exception as e:
             logging.error(f"Error processing competitors for record {record['id']}: {e}")

@@ -95,21 +95,7 @@ class ImageSearchService:
 
     def get_products_to_process(self) -> List[Dict[str, Any]]:
         return self.get.get_products_to_process()
-    
-    #　正規表現がよくわからん。使用しない。
-    def check_urls(self, url: str) -> bool:
-        patterns = {
-            "Amazon": r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?",
-            "Walmart": r"https:\\\\/\\\\/www\\\\.walmart\\\\.(com|ca)\\\\/ip\\\\/[A-Za-z0-9-]+\\\\/[A-Za-z0-9]+",
-            "eBay": r"https:\/\/www\.ebay\.com\/itm\/.*"
-        }
-        for name, pattern in patterns.items():
-            if re.match(pattern, url):
-                logging.info(f"Found matching URL: {name}: {url}")
-                return True
-            return False
-
-            
+                
     def process_image_url(self, record: Dict[str, Any]) -> None:
         self.update.update_product_status(record)
         positive_list = self.get.get_positive_list()

@@ -46,8 +46,8 @@ class AmazonAPIClient:
             return result
 
         except SellingApiRequestThrottledException:
-            print("Quota exceeded, waiting for 60 seconds before retrying...")
-            time.sleep(60)
+            print("Quota exceeded, waiting for 5 seconds before retrying...")
+            time.sleep(5)
             return self.request_product_details(asin)
 
     def request_product_price(self, asin: str) -> float:
@@ -59,8 +59,8 @@ class AmazonAPIClient:
             logging.info(f"Price for ASIN {asin}: {price}")
             return price
         except SellingApiRequestThrottledException:
-            print("Quota exceeded, waiting for 60 seconds before retrying...")
-            time.sleep(60)
+            print("Quota exceeded, waiting for 5 seconds before retrying...")
+            time.sleep(5)
             return self.request_product_price(asin)
         
     def request_product_fees(self, asin: str, price: float) -> float:
@@ -72,8 +72,8 @@ class AmazonAPIClient:
             logging.info(f"Fees for ASIN {asin}: {fees}")
             return fees
         except SellingApiRequestThrottledException:
-            logging.info("Quota exceeded, waiting for 60 seconds before retrying...")
-            time.sleep(60)
+            logging.info("Quota exceeded, waiting for 5 seconds before retrying...")
+            time.sleep(5)
             return self.request_product_fees(asin)
         
 class RepositoryToGet:
@@ -84,7 +84,7 @@ class RepositoryToGet:
 
     # get products_master to process
     def get_product_to_process(self) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM products_master WHERE weight IS NULL"
+        query = "SELECT * FROM products_master WHERE is_filled IS NULL or is_filled = FALSE"
         result = self.db_client.execute_query(query)
         logging.info(f"Found {len(result)} products to process")
         return result
@@ -97,11 +97,9 @@ class RepositoryToGet:
         return result
     
     def get_asin_from_product_detail(self, product_id: int) -> str:
-        # JOINいらんくね？
         query = """
             SELECT asin FROM products_master WHERE id = %s;
             """
-        #query = "SELECT asin_id FROM products_detail WHERE id = %s"
         result = self.db_client.execute_query(query, (product_id,))[0]
         logging.info(f"ASIN for product_id {product_id}: {result}")
         return result
@@ -134,6 +132,11 @@ class RepositoryToUpdate:
         self.db_client.execute_update(query, (fees, asin_id))
         logging.info(f"Updated product fees for asin_id {asin_id}")
 
+    def update_product_filled(self, id: int) -> None:
+        query = "UPDATE products_master SET is_filled = TRUE WHERE id = %s"
+        self.db_client.execute_update(query, (id,))
+        logging.info(f"Updated product filled for asin_id {id}")
+
 class AmazonFacade:
     def __init__(self, refresh_token: str, lwa_app_id: str, lwa_client_secret: str, marketplace: str, database_client: Any) -> None:
         self.api_client = AmazonAPIClient(refresh_token, lwa_app_id, lwa_client_secret, marketplace)
@@ -144,6 +147,7 @@ class AmazonFacade:
         return self.get.get_product_to_process()
 
     def process_product_detail(self, record_product_master: Dict[str, Any]) -> Dict[str, Any]:
+        self.update.update_product_filled(record_product_master['id'])
         record_product_master = self.api_client.request_product_details(record_product_master)
         self.update.update_product(record_product_master)
         return record_product_master
