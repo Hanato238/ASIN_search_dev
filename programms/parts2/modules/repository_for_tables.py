@@ -1,10 +1,11 @@
 from typing import Any, Dict, List, Optional
 import logging
+import repository_interface as ri
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
-class RepositoryForSellers:
+class RepositoryForSellers(ri.IRepositoryForSellers):
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 ## create
@@ -19,7 +20,7 @@ class RepositoryForSellers:
 
 ## get
     def get_sellers_to_process(self) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM sellers WHERE is_good = TRUE"
+        query = "SELECT * FROM sellers WHERE is_good = TRUE OR is_good IS NULL" 
         result = self.db_client.execute_query(query)
         logging.info(f"Found {len(result)} sellers to process")
         return result
@@ -30,7 +31,18 @@ class RepositoryForSellers:
         logging.info(f"Found seller: {result}")
         return result
 
-class RepositoryForJunction:
+## update
+    def update_seller_status(self, record: Dict[str, Any], column: str) -> None:
+        columns = ['is_good']
+        if column not in columns:
+            logging.error(f"Invalid column: {column}")
+            return
+        query = f"UPDATE sellers SET {column} = %s WHERE id = %s"
+        params = (record[column], record['id'])
+        self.db_client.execute_update(query, params)
+        logging.info(f"Updated seller status: {column} for seller_id {record['id']}")
+
+class RepositoryForJunction(ri.IRepositoryForJunction):
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
@@ -39,7 +51,7 @@ class RepositoryForJunction:
         query = "INSERT INTO junction (seller_id, product_id) VALUES (%s, %s)"
         self.db_client.execute_update(query, (seller_id, product_id))
 
-class RepositoryForProductsMaster:
+class RepositoryForProductsMaster(ri.IRepositoryForProductsMaster):
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
@@ -102,8 +114,13 @@ class RepositoryForProductsMaster:
         params = (record[column], record['id'])
         self.db_client.execute_update(query, params)
         logging.info(f"Updated product status: {column} for asin_id {record['id']}")
-    
-class RepositoryForProductsDetail:
+
+    def update_last_search(self, record: Dict[str, Any]) -> None:
+        query = "UPDATE products_master SET last_search = NOW() WHERE id = %s"
+        self.db_client.execute_update(query, (record['id'],))
+        logging.info(f"Updated id: {record['id']}'s last_search")
+
+class RepositoryForProductsDetail(ri.IRepositoryForProductsDetail):
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
@@ -131,7 +148,7 @@ class RepositoryForProductsDetail:
         self.db_client.execute_update(query, params)
         logging.info(f"Update product: {record['product_id']}, column: {column}")
 
-class RepositoryForProductsEc:
+class RepositoryForProductsEc(ri.IRepositoryForProductsEc):
     def __init__(self, db_client: Any) -> None:
         self.db_client = db_client
 
@@ -148,17 +165,17 @@ class RepositoryForProductsEc:
         
 
 #######
-def repository_for_sellers(db_client: Any) -> RepositoryForSellers:
+def sellers(db_client: Any) -> RepositoryForSellers:
     return RepositoryForSellers(db_client)
 
-def repository_for_junction(db_client: Any) -> RepositoryForJunction:
+def junction(db_client: Any) -> RepositoryForJunction:
     return RepositoryForJunction(db_client)
 
-def repository_for_products_master(db_client: Any) -> RepositoryForProductsMaster:
+def products_master(db_client: Any) -> RepositoryForProductsMaster:
     return RepositoryForProductsMaster(db_client)
 
-def repository_for_products_detail(db_client: Any) -> RepositoryForProductsDetail:
+def products_detail(db_client: Any) -> RepositoryForProductsDetail:
     return RepositoryForProductsDetail(db_client)
 
-def repository_for_products_ec(db_client: Any) -> RepositoryForProductsEc:
+def products_ec(db_client: Any) -> RepositoryForProductsEc:
     return RepositoryForProductsEc(db_client)

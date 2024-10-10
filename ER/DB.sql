@@ -26,14 +26,14 @@ CREATE TABLE junction (
 
 CREATE TABLE products_ec (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    asin_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
     price FLOAT,
-    price_unit VARCHAR(3),
-    availability BOOLEAN,
+    currency VARCHAR(3),
+    is_available BOOLEAN,
     ec_url VARCHAR(255),
     is_filled BOOLEAN DEFAULT FALSE,
     is_supported BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (asin_id) REFERENCES products_master(id)
+    FOREIGN KEY (product_id) REFERENCES products_master(id)
 );
 
 CREATE TABLE ec_sites (
@@ -46,22 +46,21 @@ CREATE TABLE ec_sites (
 
 CREATE TABLE products_detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    asin_id BIGINT NOT NULL,
-    ec_url_id BIGINT,
-    product_price FLOAT,
+    product_id BIGINT NOT NULL,
+    ec_id BIGINT,
+    purchase_price FLOAT,
     research_date TIMESTAMP,
     three_month_sales FLOAT,
     competitors INT,
     sales_price INT,
     commission INT,
-    expected_import_fees FLOAT,
-    expected_roi FLOAT,
+    import_fees FLOAT,
+    roi FLOAT,
     decision BOOLEAN,
     final_decision BOOLEAN,
-    is_ec_searched BOOLEAN DEFAULT FALSE,
-    is_researched BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (asin_id) REFERENCES products_master(id),
-    FOREIGN KEY (ec_url_id) REFERENCES products_ec(id)
+    is_filled BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (product_id) REFERENCES products_master(id),
+    FOREIGN KEY (ec_id) REFERENCES products_ec(id)
 );
 
 

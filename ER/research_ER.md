@@ -34,8 +34,8 @@ erDiagram
         float weight "商品重量"
         varchar weight_unit "重量単位: [kilograms, grams, pound]"
         string image_url "商品画像URL"
-        bool ec_search "image_urlでサーチ済みか"
         timestamp last_search "最終検索日時: not null"
+        bool ec_search "image_urlでサーチ済みか"
         bool is_good "継続的な検索対象にするか"
         bool is_filled "SP-APIでサーチ済みか"
     }
@@ -48,12 +48,12 @@ erDiagram
 
     products_ec {
         bigint id PK "auto increment"
-        bigint asin_id FK "products_master.id: not null"
+        bigint product_id FK "products_master.id: not null"
         int price
-        string price_unit
-        bool availability "仕入れ可能か"
+        string currency
+        bool is_available "仕入れ可能か"
         string ec_url "仕入れ先候補URL"
-        bool is_filled "scrape済か",
+        bool is_filled "scrape済か"
         bool is_supported "scrapeできるサイトか"
 
     }
@@ -66,19 +66,19 @@ erDiagram
 
     products_detail {
         bigint id PK "auto increment"
-        bigint asin_id FK "ASIN:products_master.id: not null"
-        bitint ec_url_id FK "products_ec.id"
-        float product_price "仕入れ価格(JPY)"
+        bigint product_id FK "ASIN:products_master.id: not null"
+        bitint ec_id FK "products_ec.id"
+        float purchase_price "仕入れ価格(JPY)"
         timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"
         int competitors "競合カート数"
         int sales_price "競合最低出品価格"
         int commission "FBA手数料"
-        float expected_import_fees "予想仕入値"
-        float expexted_roi "予想利益率"
+        float import_fees "予想仕入値"
+        float roi "予想利益率"
         bool decision "仕入判定"
         bool final_dicision "最終判定"
-        bool is_researched "Keepa-APIで検索済みか"
+        bool is_filled "Keepa-APIで検索済みか"
     }
 
     purchase {
