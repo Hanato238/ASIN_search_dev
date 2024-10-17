@@ -4,7 +4,7 @@ CREATE TABLE sellers (
     is_good BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE products_master (
+CREATE TABLE master (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     asin VARCHAR(15) UNIQUE,
     weight FLOAT,
@@ -21,10 +21,10 @@ CREATE TABLE junction (
     seller_id BIGINT,
     product_id BIGINT,
     FOREIGN KEY (seller_id) REFERENCES sellers(id),
-    FOREIGN KEY (product_id) REFERENCES products_master(id)
+    FOREIGN KEY (product_id) REFERENCES master(id)
 );
 
-CREATE TABLE products_ec (
+CREATE TABLE ec (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     product_id BIGINT NOT NULL,
     price FLOAT,
@@ -33,7 +33,7 @@ CREATE TABLE products_ec (
     ec_url VARCHAR(255),
     is_filled BOOLEAN DEFAULT FALSE,
     is_supported BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (product_id) REFERENCES products_master(id)
+    FOREIGN KEY (product_id) REFERENCES master(id)
 );
 
 CREATE TABLE ec_sites (
@@ -44,7 +44,7 @@ CREATE TABLE ec_sites (
 );
 
 
-CREATE TABLE products_detail (
+CREATE TABLE detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     product_id BIGINT NOT NULL,
     ec_id BIGINT,
@@ -59,8 +59,8 @@ CREATE TABLE products_detail (
     decision BOOLEAN,
     final_decision BOOLEAN,
     is_filled BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (product_id) REFERENCES products_master(id),
-    FOREIGN KEY (ec_id) REFERENCES products_ec(id)
+    FOREIGN KEY (product_id) REFERENCES master(id),
+    FOREIGN KEY (ec_id) REFERENCES ec(id)
 );
 
 

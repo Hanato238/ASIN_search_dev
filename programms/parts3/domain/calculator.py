@@ -135,20 +135,6 @@ class EvaluateAsinAndSellers:
             if p > 0.3:
                 self.repository.update_seller_is_good(seller['id'])
 
-class CurrencyConverter:
-    def __init__(self, ticker: str):
-        self.ticker = ticker
-        self.exchange_rate = self.get_exchange_rate()
-
-    def get_exchange_rate(self) -> float:
-        data = yf.Ticker(self.ticker)
-        exchange_rate = data.history(period="1d")['Close'][0]
-        return exchange_rate
-
-    def convert_price(self, price: float) -> float:
-        logging.info(f"Converting price {price} to JPY at rate {self.exchange_rate}")
-        return price * self.exchange_rate
-    
 class Calculator:
     def __init__(self, db_client: Any):
         self.get = RepositoryToGet(db_client)

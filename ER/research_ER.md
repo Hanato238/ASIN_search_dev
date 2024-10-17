@@ -6,13 +6,13 @@ title: "商品リサーチDB(案)"
 ---
 erDiagram
     sellers ||--o{ junction : "① ASINリスト取得"
-    junction }o--|| products_master : "② 商品マスタ情報取得"
-    products_detail }o--|| sellers : ""
-    products_master ||--o{ products_detail : "④ サーチリスト作成"
-    products_master ||--o{ products_ec : "③ 画像で仕入れ先候補検索"
-    products_detail ||--o{ competitors : ""
-    products_detail ||--|| purchase : "asin:products_detail.final_dicision=true"
-    products_detail ||--|| ec_sites : "検索元サイト"
+    junction }o--|| master : "② 商品マスタ情報取得"
+    detail }o--|| sellers : ""
+    master ||--o{ detail : "④ サーチリスト作成"
+    master ||--o{ ec : "③ 画像で仕入れ先候補検索"
+    detail ||--o{ competitors : ""
+    detail ||--|| purchase : "asin:detail.final_dicision=true"
+    detail ||--|| ec_sites : "検索元サイト"
     purchase ||--|| deliver : "ASIN:purchase.transfer=true"
     deliver ||--o{ stock : "ASIN:deliver.deliver=true"
     stock ||--o{ shipping :"ASIN:stock.shipping=true"
@@ -27,8 +27,8 @@ erDiagram
         bool is_good "継続的な検索対象にするか"
     }
 
-%% 検索時間に依存するdataを分離。productsとproducts_detailへ再編
-    products_master { 
+%% 検索時間に依存するdataを分離。productsとdetailへ再編
+    master { 
         bigint id PK "unique key: auto increment"
         varchar asin UK "ASIN:junction.asin"
         float weight "商品重量"
@@ -43,12 +43,12 @@ erDiagram
     junction {
         bigint id PK "ID: auto increment"
         bigint seller_id FK "Seller ID:sellers.id"
-        bigint product_id FK "product id: products_master.id"
+        bigint product_id FK "product id: master.id"
     }
 
-    products_ec {
+    ec {
         bigint id PK "auto increment"
-        bigint product_id FK "products_master.id: not null"
+        bigint product_id FK "master.id: not null"
         int price
         string currency
         bool is_available "仕入れ可能か"
@@ -64,10 +64,10 @@ erDiagram
         bool to_research "0-not, 1-research"
     }
 
-    products_detail {
+    detail {
         bigint id PK "auto increment"
-        bigint product_id FK "ASIN:products_master.id: not null"
-        bitint ec_id FK "products_ec.id"
+        bigint product_id FK "ASIN:master.id: not null"
+        bitint ec_id FK "ec.id"
         float purchase_price "仕入れ価格(JPY)"
         timestamp research_date "リサーチ日時"
         float three_month_sales "3カ月間販売数"

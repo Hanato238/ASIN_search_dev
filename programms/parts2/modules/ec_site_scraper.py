@@ -78,7 +78,7 @@ class ScraperFactory:
             return EBayScraper(dataset_id)
         else:
             raise ValueError(f"Scraper type '{scraper_type}' is not supported.")
-w
+
 class AmazonScraper(BrightDataAPI):
     def __init__(self, dataset_id: str) -> None:
         super().__init__(dataset_id)
