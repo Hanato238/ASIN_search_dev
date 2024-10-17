@@ -32,11 +32,14 @@ class KeepaClient(IKeepaClient):
 
 ## for seller
     def query_seller_info(self, asin: str) -> Dict[str, Any]:
-        info = self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)[0]['offers']
-        data = SellerInfoData(info)
+        infos = self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)[0]['offers']
+        data = []
+        for info in infos:
+            datums = SellerInfoData(info)
+            data.append(datums)
         return data
 
-    def get_three_month_sales(self, asin: str) -> Dict[str, Any]:
+    def search_three_month_sales(self, asin: str) -> Dict[str, Any]:
         products = self.api.query(asin, domain='JP', stats=90)
         sales_rank_drops = products[0]['stats']['salesRankDrops90']
         return sales_rank_drops
@@ -53,6 +56,7 @@ class SellerInfoData:
         self.is_scam = data['isScam']
     
     def is_competitor(self) -> Dict[Any]:
+        # raise ValueError('Seller is Amazon')  にする？
         if self.is_amazon:
             return 1000
         elif self.is_prime:
