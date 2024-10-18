@@ -80,7 +80,7 @@ class Asin:
             self._value = new_asin
         else:
             raise ValueError("New asin dose not match the pattern")
-        
+            
 class Weight:
     _VALID_UNITS = {'kilogram', 'gram', 'pound', 'ounce'}
     _CONVERSION_RATIO = {
@@ -119,6 +119,10 @@ class Weight:
             self.unit = 'gram'
             return self
 
+    def add(self, other: Weight) -> Weight:
+        if self.unit != other.unit:
+            raise ValueError("Unit mismatch")
+        return Weight(self.value + other.value, self.unit)
 
 
 class ImageURL:
@@ -186,7 +190,7 @@ class LastSearch:
         else:
             return False
 
-class Converter:
+class PriceConverter:
     def __init__(self):
         self.exchange_rates = self._get_exchange_rates()
 
@@ -202,7 +206,7 @@ class Converter:
         exchange_rate = self.exchange_rates[currency]
         return price * exchange_rate
     
-class Price(Converter):
+class Price(PriceConverter):
     _CURRENCY = {'USD', 'EUR', 'JPY', 'CNY'}
 
     def __init__(self, price: Optional[float] = None, currency: Optional[str] = 'JPY') -> None:
@@ -239,3 +243,7 @@ class Price(Converter):
             raise ValueError("Currency mismatch")
         return Price(self.price + other.price, self.currency)
     
+    def subtract(self, other: Price) -> Price:
+        if self.currency != other.currency:
+            raise ValueError("Currency mismatch")
+        return Price(self.price - other.price, self.currency)

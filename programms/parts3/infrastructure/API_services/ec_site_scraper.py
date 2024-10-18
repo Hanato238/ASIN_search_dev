@@ -1,29 +1,26 @@
 from programms.parts3.domain.interface.i_api_client import IScraper
 from programms.parts3.infrastructure.api_services.scraper_api_client.scraper_api_client import AmazonScraper, WalmartScraper, EbayScraper
-from programms.parts3.domain.interface.i_repository import IRepoForEc
-from programms.parts3.domain.object.entity import EEc
-from programms.parts3.domain.object.dto import EcData
-from abc import ABC, abstractmethod
+from programms.parts3.infrastructure.object.dto import EcData
+from abc import ABC, staticmethod
 
 class ScraperFactory(ABC):
     @staticmethod
-    def create_scraper() -> IScraper:
-        if A:
+    def create_scraper(url) -> IScraper:
+        if url == 'amazon':
             return AmazonScraper()
-        elif B:
+        elif url == 'walmart':
             return WalmartScraper()
-        elif C:
+        elif url == 'ebay':
             return EbayScraper()
         
 class EcScrapingService:
-    def __init__(self, scraper: ScraperFactory, repo_ec: IRepoForEc) -> None:
+    def __init__(self, scraper: ScraperFactory) -> None:
         self.scraper = scraper
-        self.repository.ec = repo_ec
 
-    def scrape(self, entity: EEc) -> None:
-        scraper = self.scraper.create_scraper(entity.ec_url.value)
+    def scrape(self, dto: EcData) -> None:
+        scraper = self.scraper.create_scraper(dto.ec_url)
         
-        return self.scraper.create_scraper(entity.ec_url.value).run(entity.ec_url.value())
+        return scraper.run(dto.ec_url)
     
 
 

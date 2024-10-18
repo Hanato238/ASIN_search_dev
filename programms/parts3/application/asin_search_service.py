@@ -1,7 +1,7 @@
 from programms.parts3.domain.interface.i_api_client import IKeepaClient
 from programms.parts3.domain.interface.i_repository import IRepoForSeller, IRepoForMaster, IRepoForJunction, IRepoForDetail
 from programms.parts3.domain.object.entity import ESeller, EMaster, EJunction, EDetail
-from programms.parts3.domain.object.dto import SellerData, MasterData, JunctionData, DetailData
+from programms.parts3.infrastructure.object.dto import SellerData, MasterData, JunctionData, DetailData
 from programms.parts3.domain.domain_service import DomainService
 from typing import Dict
 

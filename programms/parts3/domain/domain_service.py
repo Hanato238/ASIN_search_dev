@@ -1,6 +1,6 @@
 from programms.parts3.domain.interface.i_repository import IRepoForSeller, IRepoForMaster, IRepoForJunction, IRepoForDetail, IRepoForEc
 from programms.parts3.domain.object.entity import ESeller, EMaster, EJunction, EDetail, EEc
-from programms.parts3.domain.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
+from programms.parts3.infrastructure.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
 from typing import Union, Dict
 import logging
 
@@ -15,18 +15,19 @@ class DomainService:
         self.repository.ec = IRepoForEc()
 
 ## crud
-## repositoryに渡すのはDTO
+## domain層を出るものはすべてDTO
+    # entityになってる
     def exist(self, entity: Union[ESeller, EMaster, EJunction, EDetail, EEc]) -> bool:
         if isinstance(entity, ESeller):
-            return self.repository.sellers.find_by_column(entity.id.value)
+            return self.repository.sellers.find_by_column(seller = entity.sellr.value)
         elif isinstance(entity, EMaster):
-            return self.repository.master.exist(entity)
+            return self.repository.master.find_by_column(asin = entity.asin.value)
         elif isinstance(entity, EJunction):
-            return self.repository.junction.exist(entity)
+            return self.repository.junction.find_by_column(seller_id = entity.seller_id.value, product_id = entity.product_id.value)
         elif isinstance(entity, EDetail):
-            return self.repository.detail.exist(entity)
+            return
         elif isinstance(entity, EEc):
-            return self.repository.ec.exist(entity)
+            return
         else:
             raise ValueError('entity type is not defined')
         
@@ -44,7 +45,7 @@ class DomainService:
         else:
             raise ValueError('entity type is not defined')
         
-    def find_by_column(self, table_name: str, **kargs) -> Union[ESeller, EMaster, EJunction, EDetail, EEc]:
+    def find_by_column(self, table_name: str, **kargs) -> Union[SellerData, MasterData, JunctionData, DetailData, EcData]:
         if table_name == 'seller':
             return self.repository.sellers.find_by_column(**kargs)
         elif table_name == 'master':
@@ -58,32 +59,33 @@ class DomainService:
         else:
             raise ValueError('entity type is not defined')
         
+        # DTOへ
     def delete(self, entity: Union[ESeller, EMaster, EJunction, EDetail, EEc]) -> None:
         if isinstance(entity, ESeller):
-            self.repository.sellers.delete(entity)
+            self.repository.sellers.delete(SellerData(entity))
         elif isinstance(entity, EMaster):
-            self.repository.master.delete(entity)
+            self.repository.master.delete(MasterData(entity))
         elif isinstance(entity, EJunction):
-            self.repository.junction.delete(entity)
+            self.repository.junction.delete(JunctionData(entity))
         elif isinstance(entity, EDetail):
-            self.repository.detail.delete(entity)
+            self.repository.detail.delete(DetailData(entity))
         elif isinstance(entity, EEc):
-            self.repository.ec.delete(entity)
+            self.repository.ec.delete(EcData(entity))
         else:
             raise ValueError('entity type is not defined')
 
 
     def to_entity(self, dto: Union[SellerData, MasterData, JunctionData, DetailData, EcData]) -> Union[ESeller, EMaster, EJunction, EDetail, EEc]:
         if isinstance(dto, SellerData):
-            return dto.to_entity()
+            return dto._to_entity()
         elif isinstance(dto, MasterData):
-            return dto.to_entity()
+            return dto._to_entity()
         elif isinstance(dto, JunctionData):
-            return dto.to_entity()
+            return dto._to_entity()
         elif isinstance(dto, DetailData):
-            return dto.to_entity()
+            return dto._to_entity()
         elif isinstance(dto, EcData):
-            return dto.to_entity()
+            return dto._to_entity()
         else:
             raise ValueError('dto type is not defined')
 
@@ -139,11 +141,11 @@ class DomainService:
             dtos.append(dto)
         return dtos
     
-    def search_competitors_by_seller(self, master: MasterData) -> Dict[Any]:
+    def search_competitors_by_seller(self, master: MasterData) -> int:
         data_sellers = self.keepa_client.query_seller_info(master.asin.value)
         competitors = 0
         for datum in data_sellers:
-            if datum.is_competitor():
+            if datum._is_competitor():
                 competitors += 1
         return competitors
 
@@ -179,20 +181,6 @@ class CalculateService:
         entity.purchase_price = min_price_product['price']
         entity.ec_id = min_price_product['ec_id']
         return entity
-    
-    def calculate_import_fees(self, entity: EDetail) -> EDetail:
-        if entity.purchase_price is None:
-            raise ValueError('purchase_price is None')
-        import_tax = entity.purchase_price * 0.1
-
-        entity_master = self.repository.master.find_by_id(entity.product_id)
-        weight = entity_master.weight.convert_to_gram().value()
-        transfar_fees = weight * 2
-
-        entity.import_fees = import_tax + transfar_fees
-        return entity
-
-            
 
     def evaluate_product(self, entity: EMaster) -> None:
         return

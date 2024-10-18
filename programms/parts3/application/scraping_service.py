@@ -1,7 +1,7 @@
 from programms.parts3.domain.interface.i_api_client import IScraper
 from programms.parts3.domain.interface.i_repository import IRepoForEc
 from programms.parts3.domain.object.entity import EEc
-from programms.parts3.domain.object.dto import EcData
+from programms.parts3.infrastructure.object.dto import EcData
 from programms.parts3.domain.domain_service import DomainService
 
 class EcScrapingService:

@@ -3,7 +3,7 @@ import re
 from time import sleep
 from typing import Dict, List, Union, Any
 from programms.parts3.domain.interface.i_api_client import IScraper
-from programms.parts3.domain.object.dto import EcData
+from programms.parts3.infrastructure.object.dto import EcData
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-from programms.parts3.domain.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
+from programms.parts3.infrastructure.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 

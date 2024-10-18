@@ -145,7 +145,7 @@ classDiagram
     ScraperFactory --> BrightDataAPI
     ScraperFacade --> ScraperFactory
 
-    namespase calculator{
+    namespace calculator{
         class EvaluateAsinAndSellers {
             +__init__(repository: RepositoryToGet)
             +evaluate_product_price(prices: List[Tuple[str, float, str]]): Dict[str, Any]

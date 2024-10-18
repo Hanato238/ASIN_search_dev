@@ -1,7 +1,7 @@
 import keepa
 
 from programms.parts3.domain.interface.i_api_client import IKeepaClient
-from programms.parts3.domain.object.dto import MasterData, DetailData
+from programms.parts3.infrastructure.object.dto import MasterData, DetailData, SellerInfoData
 from typing import List, Dict, Any
 import logging
 
@@ -31,7 +31,7 @@ class KeepaClient(IKeepaClient):
             return []
 
 ## for seller
-    def query_seller_info(self, asin: str) -> Dict[str, Any]:
+    def query_seller_info(self, asin: str) -> Dict[SellerInfoData]:
         infos = self.api.query(asin, domain='JP', history=False, offers=20, only_live_offers=True)[0]['offers']
         data = []
         for info in infos:
@@ -39,29 +39,11 @@ class KeepaClient(IKeepaClient):
             data.append(datums)
         return data
 
-    def search_three_month_sales(self, asin: str) -> Dict[str, Any]:
+    def search_three_month_sales(self, asin: str) -> int:
         products = self.api.query(asin, domain='JP', stats=90)
         sales_rank_drops = products[0]['stats']['salesRankDrops90']
         return sales_rank_drops
     
-# DTO
-class SellerInfoData:
-    def __init__(self, data: Dict[Any]) -> Dict[Any]:
-        self.seller_id = data['sellerId']
-        self.is_fba = data['isFBA']
-        self.condition = data['condition']
-        self.is_shippable = data['isShippable']
-        self.is_prime = data['isPrime']
-        self.is_amazon = data['isAmazon']
-        self.is_scam = data['isScam']
-    
-    def is_competitor(self) -> Dict[Any]:
-        # raise ValueError('Seller is Amazon')  にする？
-        if self.is_amazon:
-            return 1000
-        elif self.is_prime:
-            return 1
-
 # api.query_seller_info(asin)    
     '''
         this returns data

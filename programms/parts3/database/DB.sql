@@ -16,7 +16,7 @@ CREATE TABLE master (
     is_filled BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE junction (
+CREATE TABLE junction(
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     seller_id BIGINT,
     product_id BIGINT,

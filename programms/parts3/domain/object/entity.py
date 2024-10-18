@@ -13,7 +13,6 @@ class ESeller:
     def __repr__(self) -> str:
         return f"ESellers(id={self.id}, seller={self.seller}, is_good={self.is_good})"
 
-## EMasterとEDetailは連結すべき
 class EMaster:
     def __init__(self, 
                  id: Optional[int] = None, 
@@ -48,9 +47,15 @@ class EJunction:
 
     def __repr__(self) -> str:
         return f"EJunction(id={self.id}, seller_id={self.seller_id}, product_id={self.product_id})"
-    
+
+## EDetail = master + detail table
 class EDetail:
-    def __init__(self, 
+    def __init__(self,
+                 asin: Optional[str] = None, 
+                 weight: Optional[float] = None, 
+                 weight_unit: Optional[str] = None, 
+                 last_search: datetime = datetime(2000, 1, 1),
+
                  id: Optional[int] = None, 
                  product_id: int = 0, 
                  ec_id: Optional[int] = None, 
@@ -65,6 +70,9 @@ class EDetail:
                  decision: Optional[bool] = None, 
                  final_decision: Optional[bool] = None, 
                  is_filled: bool = False):
+        self.asin = Asin(asin)
+        self.weight = Weight(weight, weight_unit)
+        self.last_search = LastSearch(last_search)
         self.id = Id(id)
         self.product_id = Id(product_id)
         self.ec_id = Id(ec_id)
@@ -88,6 +96,31 @@ class EDetail:
                 f"import_fees={self.import_fees}, roi={self.roi}, decision={self.decision}, "
                 f"final_decision={self.final_decision}, is_filled={self.is_filled})")
 
+    def calc_import_fees(self) -> None:
+        import_tax_rate = 0.1
+        import_tax = self.purchase_price.value * (1 + import_tax_rate)
+        transfer_fees = self.weight.convert_to_gram().value() * 2
+        self.import_fees = Price(import_tax + transfer_fees)
+
+    def calc_roi(self) -> None:
+        sales_price = self.sales_price.value.convert_to_jpy()
+        commission = self.commission.value.convert_to_jpy()
+        purchase_price = self.purchase_price.value.convert_to_jpy()
+        import_fees = self.import_fees.value.convert_to_jpy()
+
+        profit = sales_price.subtract(commission).subtract(purchase_price).subtract(import_fees)
+        roi = profit.value / purchase_price.value
+        self.roi = roi
+
+    def make_decision(self) -> None:
+        if self.roi == None:
+            raise ValueError('roi is None')
+        elif self.roi > 0.3:
+            self.decision = True
+        else:
+            self.decision = False
+
+# Masterと連携
 class EEc:
     def __init__(self, 
                  id: Optional[int] = None, 
