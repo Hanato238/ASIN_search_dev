@@ -1,4 +1,4 @@
-CREATE TABLE sellers (
+CREATE TABLE seller (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     seller VARCHAR(20) UNIQUE NOT NULL,
     is_good BOOLEAN DEFAULT FALSE
@@ -20,8 +20,8 @@ CREATE TABLE junction(
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     seller_id BIGINT,
     product_id BIGINT,
-    FOREIGN KEY (seller_id) REFERENCES sellers(id),
-    FOREIGN KEY (product_id) REFERENCES master(id)
+    FOREIGN KEY (seller_id) REFERENCES seller(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES master(id) ON DELETE CASCADE
 );
 
 CREATE TABLE ec (
@@ -33,7 +33,7 @@ CREATE TABLE ec (
     ec_url VARCHAR(255),
     is_filled BOOLEAN DEFAULT FALSE,
     is_supported BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (product_id) REFERENCES master(id)
+    FOREIGN KEY (product_id) REFERENCES master(id) ON DELETE CASCADE
 );
 
 CREATE TABLE ec_sites (
@@ -59,8 +59,8 @@ CREATE TABLE detail (
     decision BOOLEAN,
     final_decision BOOLEAN,
     is_filled BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (product_id) REFERENCES master(id),
-    FOREIGN KEY (ec_id) REFERENCES ec(id)
+    FOREIGN KEY (product_id) REFERENCES master(id) ON DELETE CASCADE,
+    FOREIGN KEY (ec_id) REFERENCES ec(id) ON DELETE CASCADE
 );
 
 

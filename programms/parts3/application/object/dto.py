@@ -1,4 +1,5 @@
 from programms.parts3.domain.object.entity import ESeller, EMaster, EJunction, EDetail, EEc
+from programms.parts3.domain.object.value import Id, Is, SellerId, Asin, Weight, ImageURL, EcURL, LastSearch, Price
 from typing import Dict, Any, Optional
 
 # filed変数はすべて_が必要？
@@ -37,10 +38,13 @@ class MasterData:
         return entity
 
 class JunctionData:
-    def __init__(self, junction: EJunction) -> Dict[str, Any]:
+    def __init__(self, junction: EJunction, seller: ESeller, master:EMaster) -> Dict[str, Any]:
         self.id = junction.id.value()
         self.seller_id = junction.seller_id.value()
         self.product_id = junction.product_id.value()
+
+        self.seller = seller.seller.value()
+        self.asin = master.asin.value()
 
     def __repr__(self) -> str:
         return f"JunctionData(id={self.id}, seller_id={self.seller_id}, product_id={self.product_id})"
@@ -52,9 +56,9 @@ class JunctionData:
 class DetailData:
     def __init__(self, detail: EDetail, master: EMaster = None) -> Dict[str, Any]:
         self.id = detail.id.value()
-        # master=Noneになる場合を考えるとproduct_idはdetailから取得がよさそう
         self.product_id = detail.product_id.value()
 
+        self.asin = master.asin.value()
         self.weight = master.weight.value()
         self.unit = master.weight.unit()
         self.last_search = master.last_search.value()
@@ -82,7 +86,7 @@ class DetailData:
                 f"is_filled={self.is_filled})")
 
     def _to_entity(self) -> None:
-        entity = EDetail(self.id, self.product_id, self.ec_id, self.purchase_price, self.research_date, self.three_month_sales, self.competitors, self.sales_price, self.commission, self.import_fees, self.roi, self.decision, self.final_decision, self.is_filled)
+        entity = EDetail(self.id, self.product_id, self.asin, self.weight, self.weight_unit, self.last_search, self.ec_id, self.purchase_price, self.research_date, self.three_month_sales, self.competitors, self.sales_price, self.commission, self.import_fees, self.roi, self.decision, self.final_decision, self.is_filled)
         return entity
 
 # masterと連結？
@@ -107,20 +111,20 @@ class EcData:
                 f"is_filled={self.is_filled}, is_supported={self.is_supported})")
 
     def _to_entity(self) -> None:
-        entity = EEc(self.id, self.product_id, self.price, self.currency, self.is_available, self.ec_url, self.is_filled, self.is_supported)
+        entity = EEc(self.id, self.product_id, self.asin, self.image_url, self.price, self.currency, self.is_available, self.ec_url, self.is_filled, self.is_supported)
         return entity
     
 
 # for Keepa
 class SellerInfoData:
     def __init__(self, data: Dict[Any]) -> None:
-        self.seller_id = data['sellerId']
-        self.is_fba = data['isFBA']
-        self.condition = data['condition']
-        self.is_shippable = data['isShippable']
-        self.is_prime = data['isPrime']
-        self.is_amazon = data['isAmazon']
-        self.is_scam = data['isScam']
+        self.seller_id = data.get('sellerId')
+        self.is_fba = data.get('isFBA', False)
+        self.condition = data.get('condition', None)
+        self.is_shippable = data.get('isShippable', False)
+        self.is_prime = data.get('isPrime', False)
+        self.is_amazon = data.get('isAmazon', False)
+        self.is_scam = data.get('isScam', False)
     
     def _is_competitor(self) -> int:
         # raise ValueError('Seller is Amazon')  にする？
@@ -134,20 +138,44 @@ class SellerInfoData:
 # for AmazonAPI
 class MasterInfoData:
     def __init__(self, data: Dict[Any]) -> None:
-        self.asin = data['asin']
-        self.weight = data['weight']
-        self.weight_unit = data['weightUnit']
-        self.image_url = data['imageUrl']
-        self.last_search = data['lastSearch']
-        self.is_good = data['isGood']
+        self.asin = data.get('asin')
+        self.weight = data.get('weight', 0)
+        self.weight_unit = data.get('weightUnit', None)
+        self.image_url = data.get('imageUrl', '')
+        self.last_search = data.get('lastSearch')
+        self.is_good = data.get('isGood', False)
+    
+    def update_entity(self, entity: EMaster) -> EMaster:
+        entity.weight(self.weight, self.weight_unit)
+        entity.image_url(self.image_url)
+        entity.last_search(self.last_search)
+        entity.is_good(self.is_good)
 
 class DetailInfoData:
     def __init__(self, data: Dict[Any]) -> None:
-        self.asin = data['asin']
-        self.price = data['price']
-        self.currency = data['currency']
+        self.asin = data.get('asin')
+        self.price = data.get('price', None)
+        self.currency = data.get('currency', 'JPY') 
+
+    def update_entity(self, entity: EDetail) -> EDetail:
+        entity.sales_price(self.price, self.currency)
+
 
 # for Image Search
 class EcInfoData:
-    def __init__(self, ec_url: str) -> None:
+    def __init__(self, ec_url: Optional[str]) -> None:
         self.ec_url = ec_url
+
+    def update_entity(self, entity: EEc) -> EEc:
+        entity.ec_url(self.ec_url)
+
+# for Scraper
+class ScrapingInfoData:
+    def __init__(self, data: Dict[Any]) -> None:
+        self.price = data.get('price')
+        self.currency = data.get('currency')
+        self.is_available = data.get('isAvailable', False)
+
+    def update_entity(self, entity: EEc) -> EEc:
+        entity.price(self.price, self.currency)
+        entity.is_available(self.is_available)

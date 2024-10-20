@@ -1,7 +1,7 @@
 from sp_api.api import CatalogItems, Products, ProductFees
 from sp_api.base.exceptions import SellingApiRequestThrottledException
 
-from programms.parts3.infrastructure.object.dto import MasterInfoData, DetailInfoData
+from programms.parts3.application.object.dto import MasterInfoData, DetailInfoData
 import time
 import logging
 

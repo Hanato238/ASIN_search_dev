@@ -1,6 +1,6 @@
 from google.cloud import vision
 
-from programms.parts3.infrastructure.object.dto import EcInfoData
+from programms.parts3.application.object.dto import EcInfoData
 
 import logging
 from typing import List

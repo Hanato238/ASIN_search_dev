@@ -1,6 +1,6 @@
 from programms.parts3.domain.interface.i_api_client import IScraper
-from programms.parts3.infrastructure.api_services.scraper_api_client.scraper_api_client import AmazonScraper, WalmartScraper, EbayScraper
-from programms.parts3.infrastructure.object.dto import EcData
+from programms.parts3.infrastructure.client.scraper_api_client.scraper_api_client import AmazonScraper, WalmartScraper, EbayScraper
+from programms.parts3.application.object.dto import EcData
 from abc import ABC, staticmethod
 
 class ScraperFactory(ABC):

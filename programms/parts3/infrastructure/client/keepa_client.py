@@ -1,7 +1,7 @@
 import keepa
 
 from programms.parts3.domain.interface.i_api_client import IKeepaClient
-from programms.parts3.infrastructure.object.dto import MasterData, DetailData, SellerInfoData
+from programms.parts3.application.object.dto import MasterData, DetailData, SellerInfoData
 from typing import List, Dict, Any
 import logging
 

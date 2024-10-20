@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 import re
 import datetime
 import yfinance as yf
@@ -14,6 +14,9 @@ class Id:
     def value(self) -> int:
         return self._id
 
+    def is_equal(self, other: Id) -> bool:
+        return self.value == other.value
+    
 class ProductId:
     def __init__(self, product_id: Optional[int] = None) -> None:
         if type(product_id) != int:
@@ -24,8 +27,8 @@ class ProductId:
     def value(self) -> int:
         return self._product_id
     
-    def get_asin(self) -> str:
-        return self._product_id
+    def is_equal(self, other: ProductId) -> bool:
+        return self.value == other.value
 
 class Is:
     def __init__(self, is_: bool = False) -> None:
@@ -39,7 +42,12 @@ class Is:
 
     @value.setter
     def value(self, new_is_: bool) -> None:
+        if not isinstance(new_is_, bool):
+            raise ValueError("new_is_ must be a boolean")
         self._is_ = new_is_
+        
+    def is_equal(self, other: Is) -> bool:
+        return self.value == other.value
 
 class SellerId:
     _PATTERN = r'([A-Z0-9]{13, 14})?$'
@@ -61,6 +69,9 @@ class SellerId:
         else:
             raise ValueError("New sellerId dose not match the pattern")
 
+    def is_equal(self, other: SellerId) -> bool:
+        return self.value == other.value
+
 class Asin:
     _PATTERN = r'(^B0[A-Z0-9]{8})?$'
 
@@ -81,6 +92,9 @@ class Asin:
         else:
             raise ValueError("New asin dose not match the pattern")
             
+    def is_equal(self, other: Asin) -> bool:
+        return self.value == other.value
+    
 class Weight:
     _VALID_UNITS = {'kilogram', 'gram', 'pound', 'ounce'}
     _CONVERSION_RATIO = {
@@ -96,15 +110,15 @@ class Weight:
         self._unit = weight_unit
 
     @property
-    def value(self) -> float:
+    def amount(self) -> float:
         return self._weight
     
     @property
     def unit(self) -> str:
         return self._unit
 
-    @value.setter
-    def value(self, new_weight: float) -> None:
+    @amount.setter
+    def amount(self, new_weight: float) -> None:
         self._weight = new_weight
 
     @unit.setter
@@ -115,15 +129,19 @@ class Weight:
 
     def convert_to_gram(self) -> float:
         if self.unit in self._CONVERSION_RATIO:
-            self.value = self.value * self._CONVERSION_RATIO[self.unit]
+            self.amount = self.amount * self._CONVERSION_RATIO[self.unit]
             self.unit = 'gram'
             return self
 
     def add(self, other: Weight) -> Weight:
         if self.unit != other.unit:
             raise ValueError("Unit mismatch")
-        return Weight(self.value + other.value, self.unit)
-
+        return Weight(self.amount + other.amount, self.unit)
+    
+    def is_equal(self, other: Weight) -> bool:
+        if not self.unit == other.unit:
+            raise ValueError('Unit mismatch')
+        return self.amount == other.amount
 
 class ImageURL:
     _PATTERN = r'https:\/\/m\.media\-amazon\.com\/images\/I\/.*\.jpg|None'
@@ -145,6 +163,9 @@ class ImageURL:
         else:
             raise ValueError("New image_url dose not match the pattern")
 
+    def is_equal(self, other: ImageURL) -> bool:
+        return self.value == other.value
+    
 class EcURL:
     _PATTERN = {
         "Amazon" : r"https:\\\\/\\\\/www\\\\.amazon\\\\.(com(\\\\.au|\\\\.be|\\\\.br|\\\\.mx|\\\\.cn|\\\\.sg)?|ca|cn|eg|fr|de|in|it|co\\\\.(jp|uk)|nl|pl|sa|sg|es|se|com\\\\.tr|ae)\\\\/(?:dp|gp|[^\\\\/]+\\\\/dp)\\\\/[A-Z0-9]{10}(?:\\\\/[^\\\\/]*)?(?:\\\\?[^ ]*)?",
@@ -169,7 +190,11 @@ class EcURL:
         if new_ec_url is not None and not self._matches_any_pattern(new_ec_url):
             raise ValueError(f"Value '{new_ec_url}' does not match any of the allowed patterns.")
         self._value = new_ec_url
+
+    def is_equal(self, other: EcURL) -> bool:
+        return self.value == other.value
     
+# Dateクラスでよくね？
 class LastSearch:
     _SEARCH_PERIOD = 30
 
@@ -189,6 +214,17 @@ class LastSearch:
             return True
         else:
             return False
+
+class Const:
+    def __init__(self, value: Optional[Union[int, float]] = None) -> None:
+        self._value = value
+
+    @property
+    def value(self) -> Optional[Union[int, float]]:
+        return self._value
+    
+    def is_equal(self, other: Const) -> bool:
+        return self.value == other.value
 
 class PriceConverter:
     def __init__(self):
@@ -218,15 +254,15 @@ class Price(PriceConverter):
         self._currency = currency
 
     @property
-    def value(self) -> float:
+    def amount(self) -> float:
         return self._price
     
     @property
     def currency(self) -> str:
         return self._currency
     
-    @value.setter
-    def value(self, new_price: float) -> None:
+    @amount.setter
+    def amount(self, new_price: float) -> None:
         self._price = new_price
 
     @currency.setter
@@ -247,3 +283,8 @@ class Price(PriceConverter):
         if self.currency != other.currency:
             raise ValueError("Currency mismatch")
         return Price(self.price - other.price, self.currency)
+    
+    def is_equal(self, other: Price) -> bool:
+        if self.currency != other.currency:
+            raise ValueError('Currency mismatch')
+        return self.amount == other.amount
