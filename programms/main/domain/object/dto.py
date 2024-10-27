@@ -33,7 +33,8 @@ class MasterInfoData:
         entity.last_search(self.last_search)
         entity.is_good(self.is_good)
 
-class DetailInfoData:
+# priceとfee用に分ける？
+class DetailSalesData:
     def __init__(self, data: Dict[Any]) -> None:
         self.asin = data.get('asin')
         self.price = data.get('price', None)
@@ -42,6 +43,14 @@ class DetailInfoData:
     def update_entity(self, entity: EDetail) -> EDetail:
         entity.sales_price(self.price, self.currency)
 
+class DetailCommissionData:
+    def __init__(self, data: Dict[Any]) -> None:
+        self.asin = data.get('asin')
+        self.commission = data.get('fee', None)
+        self.currency = data.get('currency', 'JPY') 
+
+    def update_entity(self, entity: EDetail) -> EDetail:
+        entity.commission(self.commission, self.currency)
 
 # for Image Search
 class EcInfoData:

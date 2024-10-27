@@ -68,7 +68,7 @@ class AmazonAPIClient:
             time.sleep(5)
             return self.request_product_price(asin)
         
-    def request_product_fees(self, asin: str, price: float) -> Optional[DetailInfoData]:
+    def request_product_commission(self, asin: str, price: float) -> Optional[DetailInfoData]:
         try:
             logging.info(f"Requesting product fees for ASIN {asin}")
             product_fees = ProductFees(credentials=self.credentials, marketplace=self.marketplace, refresh_token=self.credentials['refresh_token'])
@@ -80,4 +80,4 @@ class AmazonAPIClient:
         except SellingApiRequestThrottledException:
             logging.info("Quota exceeded, waiting for 5 seconds before retrying...")
             time.sleep(5)
-            return self.request_product_fees(asin)
+            return self.request_product_commission(asin)

@@ -1,4 +1,4 @@
-from programms.parts3.domain.object.dto import SellerInfoData, MasterInfoData, DetailInfoData, EcInfoData, ScrapingInfoData
+from programms.main.domain.object.dto import SellerInfoData, MasterInfoData, DetailSalesData, DetailCommissionData, EcInfoData, ScrapingInfoData
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
@@ -22,11 +22,11 @@ class IAmazonAPIClient(ABC):
         pass
 
     @abstractmethod
-    def request_product_price(self, asin: str) -> Optional[DetailInfoData]:
+    def request_product_price(self, asin: str) -> Optional[DetailSalesData]:
         pass
 
     @abstractmethod
-    def request_product_fees(self, asin: str, price: float) -> Optional[DetailInfoData]:
+    def request_product_commission(self, asin: str, price: float) -> Optional[DetailCommissionData]:
         pass
 
 class IImageSearcher(ABC):

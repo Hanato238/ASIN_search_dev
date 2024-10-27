@@ -1,7 +1,7 @@
-from programms.parts3.domain.interface.i_repository import IRepoForSeller, IRepoForMaster, IRepoForJunction, IRepoForDetail, IRepoForEc
-from programms.parts3.domain.object.entity import ESeller, EMaster, EJunction, EDetail, EEc
-from programms.parts3.application.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
-from programms.parts3.infrastructure.client.database_client import DatabaseClient
+from programms.main.domain.interface.i_repository import IRepoForSeller, IRepoForMaster, IRepoForJunction, IRepoForDetail, IRepoForEc
+from programms.main.domain.object.entity import ESeller, EMaster, EJunction, EDetail, EEc
+from programms.main.application.object.dto import SellerData, MasterData, JunctionData, DetailData, EcData
+from programms.main.infrastructure.client.database_client import DatabaseClient
 from typing import Optional, List
 import logging
 
